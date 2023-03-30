@@ -1,0 +1,122 @@
+---
+title: "Decision Tree"
+author: "Rhenium Yuan"
+date: "2023-03-30"
+output: html_document
+---
+
+# 决策树
+## 数据准备和预处理
+```{r}
+#rm(list = ls())
+library(readr)
+library(VIM)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(Metrics)
+library(ROCR)
+library(stringr)
+library(ggplot2)
+#读取训练集和测试集
+Ttrain <- read_csv("E:/RML/Program/Windows/data/chap9/Titanic train.csv")
+Ttest <- read_csv("E:/RML/Program/Windows/data/chap9/Titanic test.csv")
+#组合数据
+Alldata <- rbind.data.frame(Ttrain[,-2],Ttest)
+Survived <- Ttrain$Survived
+table(Survived)
+#使用VIM包中的aggr()获得缺失值
+aggr(Alldata)
+#Cabin缺失值太多，直接剔除，船票和ID具有识别性所以需要剔除
+Alldata$Cabin <- NULL
+Alldata$PassengerId <- NULL
+Alldata$Ticket <- NULL
+#年龄变量的缺失值可以使用中位数来填补
+Alldata$Age[is.na(Alldata$Age)] <- median(Alldata$Age,na.rm = TRUE)
+#fare变量的缺失值可以使用均值来填补
+Alldata$Fare[is.na(Alldata$Fare)] <- mean(Alldata$Fare,na.rm = TRUE)
+#Embarked变量的缺失值，可以使用众数来填补
+Embarkedmod <- names(sort(table(Alldata$Embarked),decreasing = T)[1])
+Alldata$Embarked[is.na(Alldata$Embarked)] <- Embarkedmod
+#分析Name变量中的特征，该变量通常体现样本的社会地位、年龄阶段、性别等信息
+newname <- str_split(Alldata$Name, ' ')
+newname <- sapply(newname, function(x) x[2])
+sort(table(newname), decreasing = T)
+#名字设置为 Mr.  Miss.  Mrs. Master. ，其余的使用other代替
+newnamepart <- c("Mr.","Miss.","Mrs.","Master.")
+newname[!(newname %in% newnamepart)] <- "other"
+Alldata$Name <- as.factor(newname)
+Alldata$Sex <- as.factor(Alldata$Sex)
+Alldata$Embarked <- as.factor(Alldata$Embarked)
+summary(Alldata)
+str(Alldata)
+#与处理好的训练数据和测试数据分开
+Ttrainp <- Alldata[1:nrow(Ttrain),]
+Ttrainp$Survived <- Survived
+Ttestp <- Alldata[(nrow(Ttrain)+1):nrow(Alldata),]
+str(Ttrainp)
+#将处理好的训练数据集保存为文件
+#write.csv(Ttrainp,"data/chap9/Titanic_clean.csv",row.names = F)
+```
+
+## 决策树模型建立
+```{r}
+#用rpart()函数将Ttrainp切分为训练集和测试集，80%作为训练集，剩下的验证模型的泛化能力
+set.seed(112)#112
+CDP <- createDataPartition(Ttrainp$Survived, p=0.8)
+train_data <- Ttrainp[CDP$Resample1,]
+test_data <- Ttrainp[-CDP$Resample1,]
+mod1 <- rpart(Survived~., data = train_data, method = 'class', cp = 0.000001)
+rpart.plot(mod1, type = 2, extra = 'auto', under = T, fallen.leaves = F, cex = 0.7, main = '决策树')
+#查看模型在训练集和测试集上的预测效果
+pre_train <- predict(mod1,train_data,type = "prob")
+pre_train2<-as.factor(as.vector(ifelse(pre_train[,2]>0.5,1,0)))
+pre_test <- predict(mod1,test_data)
+pre_test2<-as.factor(as.vector(ifelse(pre_test[,2]>0.5,1,0)))
+sprintf("决策树模型在训练集精度为：%f",accuracy(train_data$Survived,pre_train2))
+sprintf("决策树模型在测试集精度为：%f",accuracy(test_data$Survived,pre_test2))
+#计算混淆矩阵和模型的精度
+cfm <- confusionMatrix(pre_test2,as.factor(test_data$Survived))
+cfm$table
+```
+
+## 决策树优化
+```{r}
+#rpart()函数中的cp参数指定模型在剪枝时采用的阈值，plotcp()对模型复杂程度可视化
+plotcp(mod1)
+bestcp <- mod1$cptable[which.min(mod1$cptable[,'xerror']),'CP']
+bestcp
+mod1.pruned <- prune(mod1, cp = bestcp)
+rpart.plot(mod1.pruned, type = 2, extra = 'auto', under = T, fallen.leaves = F, cex = 0.7, main = '剪枝后决策树')
+#查看剪枝后模型在训练集和测试集上的预测效果
+pre_train_p <- predict(mod1.pruned,train_data)
+pre_train_p2<-as.factor(as.vector(ifelse(pre_train_p[,2]>0.5,1,0)))
+pre_test_p <- predict(mod1.pruned,test_data)
+pre_test_p2<-as.factor(as.vector(ifelse(pre_test_p[,2]>0.5,1,0)))
+sprintf("剪枝后决策树模型在训练集精度为：%f",accuracy(train_data$Survived,pre_train_p2))
+sprintf("剪枝后决策树模型在测试集精度为：%f",accuracy(test_data$Survived,pre_test_p2))
+#绘制决策树剪枝前后在测试集上的ROC曲线
+#绘制出ROC曲线对比两种模型的效果
+#计算决策树模型的ROC坐标
+pr <- prediction(pre_test[,2], test_data$Survived)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+prfdf <- data.frame(x = prf@x.values[[1]],
+                    y = prf@y.values[[1]],
+                    model = "rpart")
+#计算剪枝后决策树模型的ROC坐标
+pr <- prediction(pre_test_p[,2], test_data$Survived)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+prfdf2 <- data.frame(x = prf@x.values[[1]],
+                    y = prf@y.values[[1]],
+                    model = "rpart.prund")
+#合并数据
+prfdf <- rbind.data.frame(prfdf,prfdf2)
+#plot ROC
+ggplot(prfdf,aes(x= x,y = y,colour = model))+
+  geom_line(aes(linetype = model),size = 1)+
+  theme(aspect.ratio=1)+
+  labs(x = "假正例率",y = "真正例率")
+#计算AUC的取值
+auc(test_data$Survived,as.vector(pre_test[,2]))
+auc(test_data$Survived,as.vector(pre_test_p[,2]))
+```
