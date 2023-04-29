@@ -1,24 +1,23 @@
 ---
-title: "two-way anova"
+title: "two-way-anova"
 author: "Rhenium Yuan"
 date: "2023-04-29"
 output: html_document
 ---
 
 ```{r}
-library(emmeans)
 library(dplyr)
+library(emmeans)
+library(bruceR)
 data("ToothGrowth")
-attach(ToothGrowth)
 ToothGrowth$dose <- as.factor(ToothGrowth$dose)
-with(ToothGrowth, by(len, list(dose, supp), shapiro.test))
+attach(ToothGrowth)
+with(ToothGrowth, by(len,list(dose, supp), shapiro.test))
 fit <- aov(len ~ dose*supp)
 summary(fit)
 interaction.plot(dose, supp, len, type = 'l')
 emmeans(fit, ~ dose|supp)
-library(bruceR)
 MANOVA(ToothGrowth, dv = 'len', between = c('dose','supp'))%>%
   EMMEANS(effect = 'dose', by = 'supp')%>%
-  emmip('supp' ~ 'dose', CIs = T)
-
+  emmip('supp'~'dose', CIs = T)
 ```
