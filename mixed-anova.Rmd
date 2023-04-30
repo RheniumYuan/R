@@ -1,0 +1,19 @@
+---
+title: "Repeated Measure"
+author: "Rhenium Yuan"
+date: "2023-04-30"
+output: html_document
+---
+
+```{r}
+library(bruceR)
+data(CO2)
+CO2$conc <- as.factor(CO2$conc)
+data <- subset(CO2, Treatment=='chilled')
+attach(data)
+fit <- aov(uptake ~ conc*Type + Error(Plant/conc))
+summary(fit)
+MANOVA(data, dv ='uptake', subID = 'Plant', between = 'Type', within = 'conc')%>%
+  EMMEANS(effect = 'Type', by = 'conc')%>%
+  emmip('Type'~'conc', CIs = T)
+```
