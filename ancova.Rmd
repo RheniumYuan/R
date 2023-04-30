@@ -1,0 +1,28 @@
+---
+title: "ancova"
+author: "Rhenium Yuan"
+date: "2023-04-30"
+output: html_document
+---
+
+```{r}
+library(multcomp)
+library(car)
+library(bruceR)
+library(rstatix)
+library(HH)
+data("litter")
+attach(litter)
+leveneTest(weight~dose)
+aov(gesttime~dose)%>%
+  summary()
+aov(weight~dose*gesttime)%>%
+  summary()
+fit <- aov(weight ~ gesttime + dose)
+summary(fit)
+partial_eta_squared(fit)
+postHocs <- glht(fit, linfct = mcp(dose = "Tukey"))
+summary(postHocs)
+ancova(weight ~ gesttime + dose, data = litter)
+MANOVA(litter, dv = 'weight', between = 'dose', covariate = 'gesttime')
+```
