@@ -1,0 +1,2202 @@
+---
+title: "Meta Analysis"
+author: "Rhenium Yuan"
+date: "2023-07-14"
+output: html_document
+---
+
+“The problems are solved, not by giving new information, but by arranging what we have known since long.”
+
+– Ludwig Wittgenstein, Philosophical Investigations
+
+参考文献 Harrer, M., Cuijpers, P., Furukawa, T.A., & Ebert, D.D. (2021). Doing Meta-Analysis with R: A Hands-On Guide. Boca Raton, FL and London: Chapman & Hall/CRC Press. ISBN 978-0-367-61007-4.
+
+![](cover.png)
+
+# 效应量(Effect Size)
+
+为了进行Meta分析，我们必须找到一个可以概括所有研究的效应量。这种效应量可以直接从文献中提取或从文献中的其他数据中计算出来。效应量必须可比较(Comparable)、可计算(Computable)、可靠(Reliable)、可解释(Interpretable)
+
+## 单组设计(Single Group Designs)的效应量
+
+- 均值(Mean)
+
+- 比例(Proportion)
+
+- 相关(Correlation)
+
+## 对照组设计(Control Group Designs)的效应大小
+
+### (标准化)均值差异
+
+- 组间均值差异
+
+![](smd_sep.png)
+
+$$MD_{between} = \bar{x}_1 - \bar{x}_2$$
+$$SE_{\text{MD}_{\text{between}}} = s_{\text{pooled}}\sqrt{\frac{1}{n_1}+\frac{1}{n_2}}$$
+$$s_{\text{pooled}} = \sqrt{\frac{(n_1-1)s^2_1+(n_2-1)s^2_2}{(n_1-1)+(n_2-1)}}$$
+
+- 标准化组间均值差异(Cohen's d)
+
+$$\text{SMD}_{\text{between}} = \frac{\bar{x}_1 - \bar{x}_2}{s_{\text{pooled}}}$$
+*评估方法(Cohen,1988):0.2小效应,0.5中等效应,0.8大效应*
+
+$$SE_{\text{SMD}_{\text{between}}} = \sqrt{\frac{n_1+n_2}{n_1n_2} + \frac{\text{SMD}^2_{\text{between}}}{2(n_1+n_2)}}$$
+
+```{r}
+# Load esc package
+library(esc)
+
+# Define the data we need to calculate SMD/d
+# This is just some example data that we made up
+grp1m <- 50   # mean of group 1
+grp2m <- 60   # mean of group 2
+grp1sd <- 10  # sd of group 1
+grp2sd <- 10  # sd of group 2
+grp1n <- 100  # n of group1
+grp2n <- 100  # n of group2
+
+# Calculate effect size
+esc_mean_sd(grp1m = grp1m, grp2m = grp2m, 
+            grp1sd = grp1sd, grp2sd = grp2sd, 
+            grp1n = grp1n, grp2n = grp2n)
+
+```
+
+对SMD(Cohen's d)进行小样本校正后的效应量叫**Hedges' g**.
+
+- 组内均值差异
+
+$$\text{MD}_{\text{within}} = \bar{x}_{\text{t}_2} - \bar{x}_{\text{t}_1}$$
+$$\text{SMD}_{\text{within}} = \frac{\bar{x}_{\text{t}_2} - \bar{x}_{\text{t}_1}}{s_{\text{pooled}}}$$
+$$SE_{\text{MD}_{\text{within}}}=\sqrt{\dfrac{s^2_{\text{t}_1}+s^2_{\text{t}_2}-(2r_{\text{t}_1\text{t}_2}s_{\text{t}_1}s_{\text{t}_2})}{n}}$$
+$$SE_{\text{SMD}_{\text{within}}} = \sqrt{\frac{2(1-r_{\text{t}_1\text{t}_2})}{n}+\frac{\text{SMD}^2_{\text{within}}}{2n}}$$
+
+### 风险比(Risk Ratio)和优势比(Odds Ratio)
+
+|      |发生|不发生|         |
+| ---- |:--:| :--: |  :--:   |
+|实验组| a  |  b   |n_treat  |
+|对照组| c  |  d   |n_control|
+
+$${p_{E}}_{\text{treat}} = \frac{a}{a+b} = \frac{a}{n_{\text{treat}}}$$
+$${p_{E}}_{\text{control}} = \frac{c}{c+d} = \frac{c}{n_{\text{control}}}$$
+$$\text{RR} = \frac{{p_{E}}_{\text{treat}}}{{p_{E}}_{\text{control}}}$$
+通常进行对数转换
+$$\log \text{RR}  = \ln\text{RR}$$
+$$SE_{\log \text{RR}} = \sqrt{\frac{1}{a}+\frac{1}{c} - \frac{1}{a+b} - \frac{1}{c+d}}$$
+*由于分母不能为0,因此有时会使用连续性校正,即每个格子+0.5.但是连续性校正会导致偏差,因此Meta分析中(固定效应)通常使用Mantel-Haenszel方法合并效应量.*
+
+$$\text{Odds}_{\text{treat}} = \frac{a}{b}$$
+$$\text{Odds}_{\text{control}} = \frac{c}{d}$$
+$$\text{OR} = \frac{a/b}{c/d}$$
+$$\log \text{OR}  = \ln\text{OR}$$
+$$SE_{\log \text{OR}}  = \sqrt{\frac{1}{a}+\frac{1}{b}+\frac{1}{c}+\frac{1}{d}}$$
+```{r}
+library(esc)
+
+# Define data
+grp1yes <- 45  # events in the treatment group
+grp1no <- 98   # non-events in the treatment group
+grp2yes <- 67  # events in the control group
+grp2no <- 76   # non-events in the control group
+
+# Calculate OR by setting es.type to "or"
+esc_2x2(grp1yes = grp1yes, grp1no = grp1no,
+        grp2yes = grp2yes, grp2no = grp2no,
+        es.type = "or")
+
+# Calculate logOR by setting es.type to "logit"
+esc_2x2(grp1yes = grp1yes, grp1no = grp1no,
+              grp2yes = grp2yes, grp2no = grp2no,
+              es.type = "logit")
+```
+
+$$\text{RR} = \frac{\text{OR}}{\left(1-\dfrac{c}{n_{\text{control}}}\right)+ \left(\dfrac{c}{n_{\text{control}}}\times \text{OR} \right)}$$
+### 发病率比(Incidence Rate Ratios)
+
+发病率比考虑了时间
+
+![](incidence-1.png)
+
+$$\text{IR} = \frac{E}{T}$$
+$$\text{IRR} = \frac{ E_{\text{treat}}/T_{\text{treat}} }{E_{\text{control}}/T_{\text{control}}}$$
+$$\log \text{IRR} = \log_{e}(\text{IRR})$$
+$$SE_{\log \text{IRR}} = \sqrt{\frac{1}{E_{\text{treat}}}+\frac{1}{E_{\text{control}}}}$$
+*在比较组间差异时更常用的是危险比(Hazard Ratio),详见生存分析(Survival Analysis)*
+
+## 效应量的校正
+
+之前所说的效应量的计算方法有些存在过度简化的问题,会导致系统误差或者偏差(bias)的出现,需要采用某些方法进行校正
+
+### 小样本偏差
+
+![](dtog-1.png)
+
+小样本(一般是n<20)会导致效应量增大,对于SMD可以采用*Hedges' g*作为校正
+
+$$g = \text{SMD} \times (1-\frac{3}{4n-9})$$
+
+```{r}
+# Load esc package
+library(esc)
+
+# Define uncorrected SMD and sample size n
+SMD <- 0.5
+n <- 30
+
+# Convert to Hedges g
+g <- hedges_g(SMD, n)
+g
+```
+
+### 低信度(Unreliability)
+
+测量方法导致低信度(Unreliability)会使相关性的测量出现误差
+
+可采用校正后的相关系数
+
+$${r_{xy}}_{c} = \frac{r_{xy}}{\sqrt{r_{xx}}}$$
+$${r_{xy}}_{c} = \frac{r_{xy}}{\sqrt{r_{xx}}\sqrt{r_{yy}}}$$
+$$SE_c = \frac{SE}{\sqrt{r_{xx}}}$$
+$$SE_c = \frac{SE}{\sqrt{r_{xx}}\sqrt{r_{yy}}}$$
+
+### 范围限制(Range Ristriction)
+
+当一项研究招募的样本非常具有选择性时,通常会出现这种情况,因为这些样本可能并不代表整个人群
+
+$$U =  \frac{s_{\text{unrestricted}}}{s_{\text{restricted}}}$$
+$${r_{xy}}_c = \frac{U\times r_{xy}}{\sqrt{(U^2-1)r_{xy}^2+1}}$$
+$$\text{SMD}_c = \frac{U\times \text{SMD}}{\sqrt{(U^2-1)\text{SMD}^2+1}}$$
+$$SE_{{r_{xy}}_c} = \frac{{r_{xy}}_c}{r_{xy}}SE_{r_{xy}}$$
+$$SE_{{\text{SMD}}_c} = \frac{{\text{SMD}}_c}{\text{SMD}}SE_{\text{SMD}}$$
+
+# 合并效应量(Pooling Effect Size)
+
+## 固定效应模型与随机效应模型
+
+### 固定效应模型(Fixed-Effect Model)
+
+固定效应模型假定所有效应量均来自单一、同质的总体。该模型认为所有研究的真实效应量相同。这个真实效应量就是我们在Meta分析中要计算的总体效应量，用$\theta$表示.
+
+$$\hat\theta_k = \theta + \epsilon_k$$
+
+固定效应模型背后的理念是，不同研究观察到的效应量可能不同，但这只是因为抽样误差。实际上，它们的真实效应量都是一样的：都是固定的.
+
+标准误越小的研究，其抽样误差越小，因此其对总体效应量的估计值更有可能接近事实。尽管所有观察到的效应量都是真实效应的估计值，但有些效应量比其他效应量更好。因此，当我们在Meta分析中合并效应量时，我们应该给予精度较高（即标准误较小）的效应量更大的权重。如果我们想计算固定效应模型下的合并效应量，我们只需使用所有研究的加权平均值.
+
+第k项研究的效应量的权重如下
+
+$$w_k = \frac{1}{s^2_k}$$
+
+总效应量的计算如下，该方法又称为“逆方差加权”(inverse-variance weighting):
+
+$$\hat\theta = \frac{\sum^{K}_{k=1} \hat\theta_kw_k}{\sum^{K}_{k=1} w_k}$$
+
+对于二分变量的效应量，有其他方法来计算加权平均值，包括Mantel-Haenszel法、Peto法或Bakbergenuly(2020)的样本量加权法.
+
+下面使用{dmetar}包中的自杀干预(SuisidePrevention)数据集举例.
+
+```{r}
+# Load dmetar, esc and tidyverse (for pipe)
+library(dmetar)
+library(esc)
+library(tidyverse)
+
+# Load data set from dmetar
+data(SuicidePrevention)
+
+# Calculate Hedges' g and the Standard Error
+# - We save the study names in "study".
+# - We use the pmap_dfr function to calculate the effect size
+#   for each row.
+SP_calc <- pmap_dfr(SuicidePrevention, 
+                    function(mean.e, sd.e, n.e, mean.c,
+                             sd.c, n.c, author, ...){
+                      esc_mean_sd(grp1m = mean.e,
+                                  grp1sd = sd.e,
+                                  grp1n = n.e,
+                                  grp2m = mean.c,
+                                  grp2sd = sd.c,
+                                  grp2n = n.c,
+                                  study = author,
+                                  es.type = "g") %>% 
+                        as.data.frame()}) 
+
+# Let us catch a glimpse of the data
+# The data set contains Hedges' g ("es") and standard error ("se")
+glimpse(SP_calc)
+
+# Calculate the inverse variance-weights for each study
+SP_calc$w <- 1/SP_calc$se^2
+
+# Then, we use the weights to calculate the pooled effect
+pooled_effect <- sum(SP_calc$w*SP_calc$es)/sum(SP_calc$w)
+pooled_effect
+```
+
+### 随机效应模型(Random-Effect Model)
+
+固定效应模型认为所有研究都来自一个同质的总体，差异的唯一来源是抽样误差，但实际绝非如此，可能有无数原因导致不同研究的真实效应量存在差异.
+
+在随机效应模型中，我们希望考虑这样一个事实，即效应量比从单一同质群体中抽取时显示出更大的差异。因此，我们假定单个研究的效应量不仅仅由于抽样误差而产生偏差，还存在另一个变异来源.
+
+$$\hat\theta_k = \mu + \zeta_k + \epsilon_k$$
+
+$\mu$是合并的总效应量，$\zeta_k$表示第k个研究在总体分布中相对真实总效应的误差，与k无关，$\epsilon$是抽样误差.
+
+![](rem_sep2.png)
+
+在包括医学和社会科学在内的许多领域，常规的做法是始终使用随机效应模型，因为实际上总是可以预见到一定程度的研究间异质性。只有当我们无法检测到研究间的异质性时（我们将在第五章讨论如何检测），并且我们有很好的理由假定真实效应是固定的，才可以使用固定效应模型.
+
+#### 研究间异质性(Between-Study Heterogeneity)的估计
+
+随机效应模型引入了$\zeta_k$，它的方差用$\tau^2$表示。第k个研究的权重如下:
+
+$$w^*_k = \frac{1}{s^2_k+\tau^2}$$
+
+合并效应量如下：
+
+$$\hat\theta = \frac{\sum^{K}_{k=1} \hat\theta_kw^*_k}{\sum^{K}_{k=1} w^*_k}$$
+
+估计$\tau^2$的方法有很多，在{meta}包中可以实现的方法如下:
+
++ DerSimonian-Laird("DL")估计法(DerSimonian & Laird, 1986)
+
++ 限制最大似然("REML")或最大似然("ML")法(Viechtbauer, 2005)
+
++ Paule-Mandel("PM")法(Paule & Mandel, 1982)
+
++ 经验贝叶斯("EB")法(Sidik & Jonkman, 2019)，与Paule-Mandel方法基本相同
+
++ Sidik-Jonkman("SJ")估计法(Sidik & Jonkman, 2005)
+
+最常用的是DerSimonian-Laird估计法，这是Crochane的RevMan也是{meta}中默认的估计法，但该方法存在偏差，特别是研究数量少且异质性高的情况下。Veroniki和同事(2016)推荐使用Paule-Mandel方法来处理二元和连续数据效应量，并推荐使用限制最大似然估计法来处理连续结果。限制最大似然估计法也是{metafor}默认的方法.
+
+选择计算方法的一些建议:
+
+- 对于基于连续变量数据的效应量，可以首先使用限制最大似然估计法
+
+- 对于二分变量效应量，如果样本大小没有极端变化，Paule-Mandel是一个很好的选择
+
+- 当有充分的理由相信样本中效应量的异质性非常大，并且如果避免假阳性具有非常高的优先级，可以使用Sidik-Jonkman法
+
+- 如果希望他人能够在R语言之外尽可能精确地复制您的结果，DerSimonian-Laird估计器是首选方法
+
+#### Knapp-Hartung调整(adjustment)
+
+Knapp-Hartung调整试图控制我们对研究间异质性估计的不确定性，可以降低假阳性的概率。对合并效应量的显著性检验通常假设为正态分布(即所谓的Wald型检验)，而Knapp-Hartung方法则基于t分布，因此置信区间会相应扩大。Knapp-Hartung调整只能用于随机效应模型.
+
+## 合并效应量
+
+{meta}包中有很多函数，最通用的是metagen(generic inverse variance meta-analysis)。当我们可以使用原始数据时，{meta}为每种效应大小类型提供了专门的函数。我们可以使用metamean、metacont和metacor函数分别计算均值、(标准化)均值差和相关系数。我们可以使用metarate、metaprop和metainc函数合并比率、比例和发病率比。当我们处理OR或RR时，可以使用metabin函数.
+
+### 预先计算好的效应量
+
+```{r, m.gen}
+library(tidyverse) # needed for 'glimpse'
+library(dmetar)
+library(meta)
+
+data(ThirdWave) #效应量是Hedges' g
+glimpse(ThirdWave)
+
+m.gen <- metagen(TE = TE,
+                 seTE = seTE,
+                 studlab = Author,
+                 data = ThirdWave,
+                 sm = "SMD",
+                 fixed = FALSE,
+                 random = TRUE,
+                 method.tau = "REML",
+                 hakn = TRUE,
+                 title = "Third Wave Psychotherapies")
+
+summary(m.gen)
+
+m.gen$TE.random #合并效应量
+m.gen$TE.fixed
+
+# 改为使用Paule-Mandel法
+m.gen_update <- update.meta(m.gen, 
+                            method.tau = "PM")
+
+# Get pooled effect
+m.gen_update$TE.random
+
+# Get tau^2 estimate
+m.gen_update$tau2
+
+#save(m.gen, file = "path/to/my/meta-analysis.rda") # example path
+```
+
+### 标准化均值差异(SMD)
+
+```{r}
+# Make sure meta and dmetar are already loaded
+library(meta)
+library(dmetar)
+library(meta)
+
+# Load dataset from dmetar (or download and open manually)
+data(SuicidePrevention)
+
+# Use metcont to pool results.
+m.cont <- metacont(n.e = n.e,
+                   mean.e = mean.e,
+                   sd.e = sd.e,
+                   n.c = n.c,
+                   mean.c = mean.c,
+                   sd.c = sd.c,
+                   studlab = author,
+                   data = SuicidePrevention,
+                   sm = "SMD",
+                   method.smd = "Hedges",
+                   fixed = FALSE,
+                   random = TRUE,
+                   method.tau = "REML",
+                   hakn = TRUE,
+                   title = "Suicide Prevention")
+
+summary(m.cont)
+```
+
+### 二分变量
+
+#### RR和OR
+
+使用metabin函数合并效应量。传统的逆方差加权法并不理想，因此有一些其他的方法.
+
+##### Mantel-Haenszel法
+
+Mantel-Haenszel法通常被用作计算二元数据权重的替代方法。这也是metabin中使用的默认方法。该方法使用实验组和对照组的事件和非事件数来确定研究的权重.
+
+RR的计算公式
+
+$$w_k = \frac{(a_k+b_k) c_k}{n_k}$$
+
+OR的计算公式
+
+$$w_k = \frac{b_kc_k}{n_k}$$
+
+##### Peto法
+
+Peto法使用了一种特别的效应量:Peto odds ratio $\hat{\psi}_k$
+
+$$O_k = a_k\\E_k = \frac{(a_k+b_k)(a_k+c_k)}{a_k+b_k+c_k+d_k}\\V_k = \frac{(a_k+b_k)(c_k+d_k)(a_k+c_k)(b_k+d_k)}{{(a_k+b_k+c_k+d_k)}^2(a_k+b_k+c_k+d_k-1)}\\\log\hat\psi_k = \frac{O_k-E_k}{V_k}$$
+##### Bakbergenuly样本量法(Bakbergenuly-Sample Size Method)
+
+最近，Bakbergenuly及其同事(2020)提出了另一种方法，即效应权重仅由研究的样本量决定，并表明这种方法可能优于Mantel和Haenszel的方法。我们称之为样本量法(Sample Size Method)。这种方法的计算公式非常简单.
+
+$$w_k = \frac{n_{\text{treat}_k}n_{\text{control}_k}}{n_{\text{treat}_k} + n_{\text{control}_k} }$$
+
+在metabin中实施这种方法时，使用固定效应和随机效应模型的权重和总效应将是相同的，只有p值不同.
+
+在大多数情况下，遵循Cochrane的一般评估，使用Mantel-Haenszel方法(无连续性校正)可能是可取的。当OR是所需的效应量，且感兴趣的事件预计罕见时，可使用Peto法.
+
+```{r}
+library(dmetar)
+library(tidyverse)
+library(meta)
+
+data(DepressionMortality)
+glimpse(DepressionMortality)
+
+m.bin <- metabin(event.e = event.e, 
+                 n.e = n.e,
+                 event.c = event.c,
+                 n.c = n.c,
+                 studlab = author,
+                 data = DepressionMortality,
+                 sm = "RR",
+                 method = "MH",
+                 MH.exact = TRUE,
+                 fixed = FALSE,
+                 random = TRUE,
+                 method.tau = "PM",
+                 hakn = TRUE,
+                 title = "Depression and Mortality")
+summary(m.bin)
+
+m.bin_update <- update.meta(m.bin, 
+                            method.tau = "REML")
+
+exp(m.bin_update$TE.random)
+
+m.bin_update$tau2
+
+m.bin_or <- update.meta(m.bin, sm = "OR")
+m.bin_or
+```
+
+若数据为计算好的效应量
+
+```{r}
+DepressionMortality$TE <- m.bin$TE
+DepressionMortality$seTE <- m.bin$seTE
+
+# Set seTE of study 7 to NA
+DepressionMortality$seTE[7] <- NA
+
+# Create empty columns 'lower' and 'upper'
+DepressionMortality[,"lower"] <- NA
+DepressionMortality[,"upper"] <- NA
+
+# Fill in values for 'lower' and 'upper' in study 7
+# As always, binary effect sizes need to be log-transformed
+DepressionMortality$lower[7] <- log(1.26)
+DepressionMortality$upper[7] <- log(2.46)
+
+DepressionMortality[,c("author", "TE", "seTE", "lower", "upper")]
+
+m.gen_bin <- metagen(TE = TE,
+                     seTE = seTE,
+                     lower = lower,
+                     upper = upper,
+                     studlab = author,
+                     data = DepressionMortality,
+                     sm = "RR",
+                     method.tau = "PM",
+                     fixed = FALSE,
+                     random = TRUE,
+                     title = "Depression Mortality (Pre-calculated)")
+
+summary(m.gen_bin)
+```
+
+#### 发病率比IRR
+
+```{r}
+library(dmetar)
+library(tidyverse)
+library(meta)
+
+data(EatingDisorderPrevention)
+
+glimpse(EatingDisorderPrevention)
+
+m.inc <- metainc(event.e = event.e, 
+                 time.e = time.e,
+                 event.c = event.c,
+                 time.c = time.c,
+                 studlab = Author,
+                 data = EatingDisorderPrevention,
+                 sm = "IRR",
+                 method = "MH",
+                 fixed = FALSE,
+                 random = TRUE,
+                 method.tau = "PM",
+                 hakn = TRUE,
+                 title = "Eating Disorder Prevention")
+
+summary(m.inc)
+
+```
+
+### 相关
+
+相关系数的合并可以使用metacor函数实现，使用逆方差加权法。在合并前metacor会对相关系数进行Fisher's z转换:
+
+$$z = 0.5\log_{e}\left(\frac{1+r}{1-r}\right)$$
+
+```{r}
+library(dmetar)
+library(tidyverse)
+library(meta)
+
+data(HealthWellbeing)
+glimpse(HealthWellbeing)
+
+m.cor <- metacor(cor = cor, 
+                 n = n,
+                 studlab = author,
+                 data = HealthWellbeing,
+                 fixed = FALSE,
+                 random = TRUE,
+                 method.tau = "REML",
+                 hakn = TRUE,
+                 title = "Health and Wellbeing")
+summary(m.cor)
+```
+
+### 均值
+
+使用metamean函数可以对均值进行Meta分析。该函数使用通用的逆方差法来合并，使用 时，必须先确定是对原始均值还是对数变换均值进行Meta分析。
+
+```{r}
+library(dmetar)
+library(tidyverse)
+library(meta)
+data(BdiScores)
+
+# We only need the first four columns
+glimpse(BdiScores[,1:4])
+
+m.mean <- metamean(n = n,
+                   mean = mean,
+                   sd = sd,
+                   studlab = author,
+                   data = BdiScores,
+                   sm = "MRAW", # 若经过log转换则为MLN
+                   fixed = FALSE,
+                   random = TRUE,
+                   method.tau = "REML",
+                   hakn = TRUE,
+                   title = "BDI-II Scores")
+summary(m.mean)
+```
+
+### 比例
+
+metaprop函数可以用来合并比例。如果我们指定sm = "PLOGIT"，metaprop 函数会自动完成logit转换。如果需要对原始比例进行合并，我们可以使用 sm = "PRAW"，但是不鼓励这样做。
+
+默认的metaprop比例合并方法比较特殊。如果我们使用logit转换值，函数不会使用逆方差法进行合并，而是建立一个广义线性混合效应模型(GLMM)。从本质上讲，该函数对我们的数据拟合了一个*逻辑回归*模型，其中包括随机效应，以考虑不同研究之间真实效应量不同的事实。
+
+```{r}
+library(dmetar)
+library(meta)
+library(tidyverse)
+
+data(OpioidMisuse)
+glimpse(OpioidMisuse)
+
+m.prop <- metaprop(event = event,
+                   n = n,
+                   studlab = author,
+                   data = OpioidMisuse,
+                   method = "GLMM", #逆方差法设置为Inverse
+                   sm = "PLOGIT",
+                   fixed = FALSE,
+                   random = TRUE,
+                   hakn = TRUE,
+                   title = "Opioid Misuse")
+summary(m.prop)
+```
+
+# 研究间异质性(Between-Study Heterogeneity)
+
+在Meta分析中，真实效应量的变化程度被称为研究间异质性。我们在上一章的随机效应模型中已经简单提到了这一概念。随机效应模型假定研究间异质性会导致研究的真实效应量不同。在Meta分析中不仅要报告总体效应，还要说明这一估计值的可信度。其中一个重要部分就是量化和分析研究间的异质性.
+
+## 研究间异质性的测量
+
+### Cochran’s Q
+
+根据随机效应模型，研究间差异的来源有两个：抽样误差$\epsilon$和研究间异质性$\zeta$。当我们想量化研究间的异质性时，困难在于确定有多少差异可归因于抽样误差，有多少可归因于真正的效应量的差异。
+
+传统的Meta分析使用Cochran's Q区分实际的研究间异质性和抽样误差。Cochran's Q实际上是加权的平方和：
+
+$$Q = \sum^K_{k=1}w_k(\hat\theta_k-\hat\theta)^2$$
+其中$w_k$是逆方差权重，$\hat{\theta}$是根据固定效应模型得到的合并效应.
+
+Q近似服从自由度为K-1的卡方分布。根据这个性质可以进行研究间异质性的检验，即Cochran's Q检验.
+
+然而，Q在Meta分析中的性质不完全服从df为K-1的卡方分布，且Q易受样本量影响，因此研究中不常推荐Q检验.
+
+### Higgins & Thompson’s I^2统计量
+
+I^2是另一个测量研究间异质性的统计量，是在Q的基础上得到的，它被定义为非抽样误差引起的效应量变异所占的百分比.
+
+$$I^2 = \frac{Q-(K-1)}{Q}$$
+
+*I^2不能小于0，若Q小于K-1则I^2=0*
+
+I^2的大小可以做如下解释(J.P.Higgins and Thompson, 2002)：
+
+- I^2=25%: 低异质性
+
+- I^2=50%: 中等异质性
+
+- I^2=75%: 高异质性
+
+### H^2统计量
+
+$$H^2 = \frac{Q}{K-1}$$
+H^2相比I^2使用得少一些.
+
+### tau^2和tau
+
+$\tau^2$是研究间变异的方差，$\tau$是标准差，可用来计算实际效应量的置信区间.
+
+由于上述统计量都有其局限，我们可以使用预测区间(Prediction Intervals, PIs)预测未来研究的效应量的范围.
+
+$$\hat{\mu} \pm t_{K-1, 0.975}\sqrt{SE_{\hat\mu}^2+\hat\tau^2}$$
+
+```{r}
+m.gen <- update.meta(m.gen, prediction = TRUE)
+
+summary(m.gen)
+```
+
+报告格式:
+
+“The between-study heterogeneity variance was estimated at $\tau^2$ = 0.08 (95%CI: 0.03-0.35), with an $I^2$ value of 63% (95%CI: 38-78%). The prediction interval ranged from $g$ = -0.06 to 1.21, indicating that negative intervention effects cannot be ruled out for future studies.”
+
+指标告诉我们，我们的数据中存在中度到严重的异质性。我们的Meta分析中的效应并非完全异质性，但不同研究之间的真实效应大小显然存在一些差异。因此，我们不妨探讨一下造成这种异质性的原因。可能有一两项研究并不真正"适合"，因为它们的效应大小要高得多。这可能扩大了我们分析中的异质性，更糟糕的是：它可能导致对真实效应的高估。另一方面，我们的合并效应量也可能受到一项样本量非常大的研究的严重影响，该研究报告的效应大小出乎意料地小。这可能意味着合并效应低估了治疗的真正效果.
+
+为了解决这些问题，我们现在将转向评估我们合并结果稳健性的程序：离群值(outlier)分析和影响(influence)分析.
+
+## 离群值和高影响力案例
+
+如前所述，研究间异质性可能由一项或多项效应量极端的研究引起，这些研究并不完全 "适合"。这可能会扭曲我们的合并效应估计值，因此在分析中剔除此类异常值后，最好重新检查合并效应.
+
+另一方面，我们也想知道我们发现的合并效应估计值是否稳健，这意味着它并不严重依赖于某一项研究。因此，我们还想知道，是否有研究将我们的分析效果严重推向一个方向。此类研究被称为有影响的案例.
+
+### 去除离群值
+
+简单地可以按照95%置信区间与合并效应量的置信区间是否重叠判断离群值。这种方法的原理非常简单。抽样误差大的研究预计会严重偏离合并效应。然而，由于此类研究的置信区间也会很大，这就增加了置信区间与集合效应置信区间重叠的可能性.
+
+然而，如果某项研究的标准误差较低，但仍然(出乎意料地)严重偏离合并效应，则置信区间很有可能不会重叠，该研究将被归类为离群值.
+
+{dmetar}包中包含一个名为find.outliers的函数，它实现了这种简单的离群值去除算法。它在{meta}对象中搜索离群研究，将其删除，然后重新计算结果.
+
+```{r}
+summary(m.gen)
+find.outliers(m.gen)
+```
+### 影响分析(Influence Analysis)
+
+有些研究，即使其效应量不是特别高或特别低，仍然会对我们的总体结果产生非常大的影响。例如，我们可能在meta分析中发现了总效应，但其显著性取决于一项大型研究。这就意味着，一旦剔除该有影响的研究，合并效应就不再具有统计学意义。当然，异常值通常也有影响力，上一章的例子就说明了这一点。但它们并非必须如此.
+
+我们可以使用留一法(leave-one-out)判别高影响案例。基于这些数据，我们可以计算不同的影响诊断(influence diagnostics) 。影响诊断允许我们发现对meta分析总体估计值影响最大的研究，并让我们评估这种巨大的影响是否扭曲了我们的合并效应.
+
+```{r}
+m.gen.inf <- InfluenceAnalysis(m.gen, random = TRUE)
+```
+
+InfluenceAnalysis为我们绘制了一个Baujat图检测高影响力研究.
+
+```{r}
+plot(m.gen.inf, "baujat")
+```
+
+InfluenceAnalysis还包括了一组影响力诊断的图
+
+```{r}
+plot(m.gen.inf, "influence")
+```
+第一幅图显示了各项研究的外部标准化残差。第二幅图展示的是DFFITS值，表示的是去掉该研究后合并效应量的变化。第三幅图展示的是Cook距离，与DFFITS类似。第四幅图展示的是协方差率(Covariance Ratio)，小于1表明去掉这项研究后合并效应量的计算更准确。第五、六图展示的是留一法tau^2和Q。最后两幅图展示的是hat和权重，都表示的是一项研究的权重.
+
+$$t_{k} = \frac{\hat\theta_{k}-\hat\mu_{\setminus k}}{\sqrt{\mathrm{Var}(\hat\mu_{\setminus k})+\hat\tau^2_{\setminus k}+s^2_k}}\\\mathrm{DFFITS}_k =  \dfrac{\hat\mu-\hat\mu_{\setminus k}}{\sqrt{\dfrac{w_k^{(*)}}{\sum^{K}_{k=1}w_k^{(*)}}(s^2_k+\hat\tau^2_{\setminus k})}}\\D_k =  \frac{(\hat\mu-\hat\mu_{\setminus k})^2}{\sqrt{s^2_k+\hat\tau^2}}\\\mathrm{CovRatio}_k = \frac{\mathrm{Var}(\hat\mu_{\setminus k})}{\mathrm{Var}(\hat\mu)}$$
+对于上述指标有如下经验标准：
+
+$$\mathrm{DFFITS}_k > 3\sqrt{\frac{1}{k-1}}\\D_k > 0.45\\\mathrm{hat_k} > 3\frac{1}{k}$$
+
+在我们的示例中，只有Dan，即DanitzOrsillo研究是这种情况。然而，虽然只有这项研究被定义为有影响力的案例，但在大多数图中实际上存在两个峰值。我们也可以将Sha(Shapiro et al.)定义为有影响的案例，因为这项研究的值也非常极端。因此，我们发现DanitzOrsillo和Shapiro et al. 的研究可能具有影响力。这是一个有趣的发现，因为我们根据Baujat图选择了相同的研究，并且只关注统计异常值。这进一步证实，这两项研究可能扭曲了我们的合并效应估计值，并导致我们在初步Meta分析中发现的部分研究间异质性.
+
+还可以通过森林图(forest plot)进行分析。
+
+```{r}
+plot(m.gen.inf, "es")
+plot(m.gen.inf, "i2")
+```
+
+在这两幅森林图中，我们看到了重新计算的合并效应，每次都省略了一项研究。在这两个图中，都有一个阴影区域，其中心有一条虚线。这代表原始汇总效应大小的95%置信区间，以及估计的合并效应本身.
+
+第一幅图按效应大小(从低到高)排序。在这里，我们可以看到当剔除不同的研究时，总体效应估计值是如何变化的。由于 "Danitz-Orsillo "和 "Shapiro et al. "这两项离群且有影响力的研究具有非常高的效应大小，我们发现去除这两项研究后，总体效应最小.
+
+### GOSH图分析
+
+另一种探索数据异质性模式的方法是所谓的异质性图形显示(Graphic Display of Heterogeneity, GOSH)图.
+
+该方法不像留一法，它会计算所有可能的研究的组合，即2^(K-1)种组合。由于运算量非常大，R中最多只能拟合1,000,000个模型.
+
+```{r}
+library(metafor)
+
+m.rma <- rma(yi = m.gen$TE,
+             sei = m.gen$seTE,
+             method = m.gen$method.tau,
+             test = "knha")
+
+res.gosh <- gosh(m.rma)
+```
+
+我们可以将 res.gosh 对象插入plot函数来显示曲线图。附加的alpha参数控制着图形中点的透明程度，1表示完全不透明。由于图中有很多数据点，因此使用较小的alpha值是合理的，这样可以更清楚地显示数值"堆积"的位置.
+
+```{r}
+plot(res.gosh, alpha = 0.01)
+```
+
+我们在数据中看到了一个有趣的图案：虽然大多数值都集中在一个具有相对高效应和高异质性的聚类中，但是在一个具有相对低效应和高异质性的聚类中，I^2的分布却很不均匀：严重右斜和双峰的。似乎有一些研究组合的估计异质性要低得多，但其合并效应大小也较小，从而形成了 "彗星状 "的尾部形状.
+
+在看到效应大小-异质性图案后，真正重要的问题是：哪些研究导致了这种形状？为了回答这个问题，我们可以使用gosh.diagnostics函数.
+
+该函数使k-means、DBSCAN(density reachability and connectivity clustering)算法 、高斯混合模型(gaussian mixture models)算法来检测GOSH图数据中的聚类。根据识别出的聚类，该函数自动确定哪些研究对每个聚类的贡献最大。例如，如果我们发现一项或几项研究在异质性较高的聚类中比例过高，这表明这些研究单独或联合可能导致异质性较高.
+
+```{r}
+res.gosh.diag <- gosh.diagnostics(res.gosh, 
+                                  km.params = list(centers = 2),
+                                  db.params = list(eps = 0.08, 
+                                                   MinPts = 50))
+res.gosh.diag
+
+plot(res.gosh.diag)
+
+update.meta(m.gen, exclude = c(3, 4, 16)) %>% 
+  summary()
+```
+
+# 森林图(Forest Plot)
+
+最常用的可视化meta分析的方法是绘制*森林图*。这种图以图形方式显示观察到的效应量、置信区间，通常还包括每项研究的权重。它们还显示了我们在meta分析中计算出的合并效应。这可以让其他人快速查看纳入研究的精确度和分布，以及合并效应与每个效应量之间的关系.
+
+```{r}
+forest.meta(m.gen, 
+            sortvar = TE,
+            prediction = TRUE, 
+            print.tau2 = FALSE,
+            leftcols = c("studlab", "TE", "seTE", "RiskOfBias"),
+            leftlabs = c("Author", "g", "SE", "Risk of Bias"))
+
+# JAMA 
+forest.meta(m.gen, layout = "JAMA")
+
+# Cochrane’s Review Manager 5
+forest.meta(m.gen, layout = "RevMan5")
+```
+
+保存方法
+```{r}
+# PDF
+pdf(file = "forestplot.pdf", width = 8, height = 7)
+forest.meta(m.gen, 
+            sortvar = TE,
+            prediction = TRUE, 
+            print.tau2 = FALSE,
+            leftlabs = c("Author", "g", "SE"))
+dev.off()
+
+# PNG
+png(file = "C:/Users/29136/Desktop/forestplot.png", width = 2800, height = 2400, res = 300)
+forest.meta(m.gen, 
+            sortvar = TE,
+            prediction = TRUE, 
+            print.tau2 = FALSE,
+            leftlabs = c("Author", "g", "SE"))
+dev.off()
+```
+
+## 窗帘图(Drapery Plots)
+
+森林图是最常用的可视化meta分析的图表，但不是唯一的一种。由于森林图在绘制中根据p<0.05这一标准，但由于*可重复性危机*的影响，很多时候发表研究不再依赖p<0.05，这时*窗帘图*(Drapery Plot)是一种很好的方法.
+
+窗帘图使用*p值函数*绘制出不同p值下置信区间的长度.
+
+```{r}
+drapery(m.gen, 
+        labels = "studlab",
+        type = "pval", 
+        legend = FALSE)
+```
+
+# 亚组分析(Subgroup Analyses)
+
+通过离群值和影响分析，我们能够发现潜在的研究间异质性。这时我们需要一种不同的方法，一种能够让我们确定为什么在我们的数据中能够发现特定的异质性的方法。*亚组分析*（也称为调节分析）是实现这一目标的方法之一。它们允许我们检验特定的假设，描述为什么某些类型的研究比另一种类型的研究产生更小或更大的效应.
+
+例如，我们可以研究某种药物是否比另一种药物产生更大的效应。或者，我们可以将随访时间较短的研究与随访时间较长的研究进行比较。我们还可以研究观察到的效果是否因研究进行的文化区域而有所不同.
+
+亚组分析背后的理念是，meta分析不仅仅是计算平均效应大小，它也可以是研究证据变异的工具。在亚组分析中，我们不仅将异质性视为一种困扰，还将其视为一种有趣的变异，这种变异可能是科学假说所能解释的，也可能是科学假说所不能解释的.
+
+## 固定效应模型(Fixed-Effects Model)
+
+在亚组分析中，我们假设meta分析中的研究并非来自一个总体，而是属于不同的亚组，每个亚组都有自己的真实总体效应。我们的目的是拒绝 "亚组间效应大小无差异 "的零假设.
+
+亚组分析的计算包括两部分：首先，我们合并每个亚组的效应。随后，使用统计检验比较各亚组的效应(Borenstein & Higgins, 2013).
+
+### 合并亚组效应量
+
+如果我们假设亚组中的所有研究都来自同一人群，并且有一个共同的真实效应，我们就可以使用固定效应模型。但是在实践中，即使我们将研究划分为更小的组，这一假设也往往不现实.
+
+因此，另一种方法是使用随机效应模型。这种方法假定一个亚组内的研究都来自一个群体，我们要估计的是这个群体的平均值。与普通meta分析不同的是，我们要进行多个独立的随机效应meta分析，每个亚组一个。即每个亚组各有一个合并效应$\hat{\mu}_g$和异质性$\hat{\tau}^2_g$，但操作中常常假设各亚组的变异是一样的即$\tau^2$。当k<5时这个假设常常有偏差，因此会使用一个合并后的$\tau^2$.
+
+### 比较亚组效应量
+
+当我们想检验G个亚组的效应是否不同时，可以假定一个亚组的合并效应实际上不过是一个大型研究的观察效应大小。这是我们只需要研究效应量的差异是由于抽样误差造成的，还是由于效应量的真正差异造成的.
+
+在亚组内我们选择随机效应模型，亚组间使用固定效应模型，因此整个亚组分析的方法称为Fixed-Effects Model，这里的effects是*复数*形式.
+
+![](subgroups_sep.png)
+
+亚组分析实际上是meta回归的特例.
+
+## 亚组分析的局限
+
+由于亚组分析增加了检验的次数，因此统计功效可能不足.
+
+- 如果亚组内存在大量的研究间异质性，这将增加合并效应量的标准误，这意味着它们的置信区间可能有很大的重叠。因此，即使存在差异，也很难发现亚组间的显著差异；
+
+- 亚组之间的差异通常很小，这需要的统计功效(power)更大；
+
+- 如果我们没有发现亚组间效应大小的差异，这并不自动意味着亚组产生了等同的结果；
+
+- 可以事先进行亚组的功效分析。一般的经验法则是：每个亚组至少包含K=10个研究.
+
+亚组分析纯粹是观察性的，因此我们应始终牢记，效应差异也可能是由混杂变量引起的.
+
+另外，对于分组的定义也可能成为问题。使用合并信息(aggregate information)可能导致生态偏倚(ecological bias).
+
+总之对亚组分析必须批判看待.
+
+```{r}
+library(dmetar)
+library(meta)
+data("ThirdWave")
+
+# Show first entries of study name and 'RiskOfBias' column
+head(ThirdWave[,c("Author", "RiskOfBias")])
+
+update.meta(m.gen, 
+            subgroup = RiskOfBias, 
+            tau.common = FALSE)
+
+update.meta(m.gen, subgroup = RiskOfBias, tau.common = TRUE)
+
+# subgroup-specific p-values
+subgroup <- update.meta(m.gen, 
+            subgroup = RiskOfBias, 
+            tau.common = FALSE)
+subgroup$pval.random.w
+```
+
+# Meta回归
+
+Meta回归使用混合效应模型通过自变量x预测效应量的变化.
+
+## Meta回归模型
+
+$$\hat\theta_k = \theta + \beta x_{k} + \epsilon_k+\zeta_k$$
+
+### 分类型自变量
+
+哑变量编码(dummy-coding):
+
+$$\begin{equation}D_g=\begin{cases}
+    0: & \text{Subgroup A}\\
+    1: & \text{Subgroup B}
+  \end{cases}\end{equation}$$
+$$\hat\theta_k = \theta + \beta D_g +\epsilon_k+\zeta_k$$
+$$\begin{equation}
+  D_g=\begin{cases}
+    0: & \hat\theta_k = \theta_A + \epsilon_k+\zeta_k\\
+    1: & \hat\theta_k = \theta_A + \theta_{\Delta} +\epsilon_k+\zeta_k
+  \end{cases}\end{equation}$$
+  
+![](subgroups2_sep.png)
+
+### 连续型自变量
+
+![](subgroups3_sep.png)
+
+### 模型拟合
+
+Meta回归使用加权最小二乘法(weighted least squares, WLS)拟合，
+
+![](rem_mem_sep.png)
+
+测定系数：
+$$R^2_* = 1- \frac{\hat\tau^2_{\text{unexplained}}}{\hat\tau^2_{\text{(total)}}}\\R^2_* =  \frac{\hat\tau^2_{\text{REM}}-\hat\tau^2_{\text{MEM}}}{\hat\tau^2_{\text{REM}}}$$
+
+Wald检验：
+$$z = \frac{\hat\beta}{SE_{\hat\beta}}$$
+
+```{r}
+library(meta)
+year <- c(2014, 1998, 2010, 1999, 2005, 2014, 
+          2019, 2010, 1982, 2020, 1978, 2001,
+          2018, 2002, 2009, 2011, 2011, 2013)
+
+m.gen.reg <- metareg(m.gen, ~year)
+
+m.gen.reg
+
+# bubble plot
+bubble(m.gen.reg, studlab = TRUE)
+
+# subgroup 
+metareg(m.gen, RiskOfBias)
+```
+
+## 多元Meta回归
+
+$$\hat \theta_k = \theta + \beta_1x_{1k} + ... + \beta_nx_{nk} + \epsilon_k + \zeta_k$$
+
+### 交互作用
+
+![](metareg2_col_sep.png)
+
+$$\hat \theta_k = \theta + \beta_1x_{1k} + \beta_2x_{2k} + \beta_3x_{1k}x_{2k}+ \epsilon_k + \zeta_k$$
+
+### 多元Meta回归的注意问题
+
+- 过拟合
+
+- 多重共线性
+
+- 拟合步骤
+
+```{r}
+library(metafor)
+
+library(tidyverse)
+library(dmetar)
+data(MVRegressionData)
+
+glimpse(MVRegressionData)
+
+# Checking for Multi-Collinearity
+MVRegressionData[,c("reputation", "quality", "pubyear")] %>% cor()
+
+library(PerformanceAnalytics)
+
+MVRegressionData[,c("reputation", "quality", "pubyear")] %>% 
+  chart.Correlation()
+
+# fit a multiple meta-regression model
+m.qual <- rma(yi = yi,
+              sei = sei,
+              data = MVRegressionData,
+              method = "ML", # It is advisable to use "ML", because this allows one to compare different meta-regression models later on
+              mods = ~ quality,
+              test = "knha")
+
+m.qual
+
+m.qual.rep <- rma(yi = yi, 
+                  sei = sei, 
+                  data = MVRegressionData, 
+                  method = "ML", 
+                  mods = ~ quality + reputation, 
+                  test = "knha")
+
+m.qual.rep
+
+# model comparison
+anova(m.qual, m.qual.rep)
+
+# modeling interactions
+# Add factor labels to 'continent'
+# 0 = Europe
+# 1 = North America
+levels(MVRegressionData$continent) = c("Europe", "North America")
+
+# Fit the meta-regression model
+m.qual.rep.int <- rma(yi = yi, 
+                      sei = sei, 
+                      data = MVRegressionData, 
+                      method = "REML", 
+                      mods = ~ pubyear * continent, 
+                      test = "knha")
+
+m.qual.rep.int
+```
+该模型的R^2达到了100%，这是因为这个数据集只是为了举例设计的，现实中几乎不会出现这种情况，如果出现的话甚至需要考虑过拟合的情况.
+
+### 置换检验(Permutation Test)
+
+置换检验是一种特殊的重采样方法。这种方法可以更好地评估我们模型中的系数是否确实捕捉到了数据背后的真实模式；或者我们是否过度拟合了我们的模型，从而错误地假设了数据中的模式，而这些模式实际上是统计噪声。使用置换检验可以来评估Meta回归模型的稳健性.
+
+```{r}
+permutest(m.qual.rep)
+```
+
+### 多模型推断(Multi-Model Inference)
+
+我们也可以尝试对所有可能的预测因子组合进行建模，这就是所谓的多模型推断。这可以检验哪种可能的预测因子组合拟合效果最好，以及哪种预测因子是最重要的预测因子.
+
+```{r}
+multimodel.inference(TE = "yi", 
+                     seTE = "sei",
+                     data = MVRegressionData,
+                     predictors = c("pubyear", "quality", 
+                                    "reputation", "continent"),
+                     interaction = FALSE)
+# AICc is default, small sample-corrected Akaike’s information criterion
+```
+
+*注意，多模型推断是一种探索性的方法，我们根据多模型推断结果进行建模时并非依赖先验知识，因此在建立模型时必须报告多模型推断的结果.*
+
+# 发表偏倚(Publication Bias)
+
+早在20世纪90年代，抗抑郁药物（如选择性5-羟色胺再摄取抑制剂，或SSRIs）对治疗抑郁症患者有效已成为共识。这些证据大多由已发表的药物治疗试验的meta分析提供，在这些试验中，抗抑郁药与安慰剂进行了比较。考虑到抗抑郁药物市场价值数十亿美元，而且还在稳步增长，因此抗抑郁药物的疗效是一个重要问题.
+
+2002年Irving Kirsch及其同事撰写的一篇名为《皇帝的新药》(The Emperor's New Drugs)的文章。根据 "信息自由法"，Kirsch及其同事获得了制药公司向美国食品药品管理局提供的此前未公开的抗抑郁药试验数据。他们发现，如果同时考虑这些未公开的数据，抗抑郁药与安慰剂相比所带来的益处充其量微乎其微，在临床上可以忽略不计。Kirsch及其同事认为，这是因为制药公司只公布了具有有利结论的研究，而那些具有 "令人失望 "证据的研究则被隐瞒了.
+
+当一项研究发表的概率受到其结果的影响时，就会出现发表偏倚(Publication bias)。有大量证据表明，如果一项研究的结果具有统计学意义，或者证实了最初的假设，那么该研究更有可能被公开发表.
+
+发表偏倚只是众多非报告偏倚(non-reporting bias)的一种，非报告偏差还有：引用偏倚(citation bias)、时滞偏倚(time-lag bias)、多重发表偏倚(Multiple publication bias)、语言偏倚(Language bias)、结果报告偏倚(Outcome reporting bias).
+
+除了非报告偏倚，研究人员在还可能使用有问题研究方法(questionable research practices, QRPs)，如p-hacking和HARKing(hypothesizing after the results are known).
+
+## 在meta分析中应对发表偏倚
+
+可以通过检索文献时采用一些方法和使用统计手段.
+
+### 小研究效应法(Small-Study Effect Methods)
+
+有多种小研究效应方法可用于评估和纠正meta分析中的发表偏倚。正如其名称所示，这些方法特别关注小规模研究。从统计学的角度来看，这意味着研究的标准误差较高。小研究效应方法假定小研究更容易受到发表偏倚的影响.
+
+这一假设基于三个核心理念：
+
+- 由于需要投入大量的资源和时间，因此无论结果是否显著，大型研究都有可能发表.
+
+- 中等规模的研究不被发表的风险更大。然而，即使统计能力仅为中等，通常也足以产生有意义的结果。这意味着，只有部分研究会因为得出 "不理想"（即不显著）的结果而无法发表.
+
+- 小型研究产生非显著性结果的风险最大，因此最有可能成为 "抽屉里的档案"。在小型研究中，只有非常大的效应才具有显著性。这就意味着，只有效果非常大的小型研究才会被发表.
+
+我们看到，这些假设背后的所谓机制非常简单。从根本上说，发表偏倚的存在是因为只有显著的效应才会被发表。由于获得显著结果的概率随着样本量的增大而增大，因此发表偏差将不成比例地影响小型研究.
+
+#### 漏斗图(Funnel Plot)
+
+通过漏斗图检查小研究效应是一种常规方法。漏斗图是研究的观察效应大小在X轴上与标准误差在Y轴上的散点图。通常，漏斗图中的Y轴是倒置的(即Y轴上 "较高 "的值代表较低的标准误差).
+
+当不存在发表偏倚时，漏斗图中的数据点应形成一个大致对称的倒置漏斗。这就是它们被称为漏斗图的原因。在漏斗图的上部(标准误差较低的研究)，研究结果应紧紧靠在一起，且与汇集效应大小相距不远。在图的下部，随着标准误差的增大，漏斗 "张开"，效应大小将更多地分散到集合效应的左右两侧.
+
+```{r}
+# Load 'meta' package
+library(meta)
+
+# Produce funnel plot
+funnel.meta(m.gen,
+            xlim = c(-0.5, 2),
+            studlab = TRUE)
+
+# Add title
+title("Funnel Plot (Third Wave Psychotherapies)")
+
+```
+
+该数据集在漏斗图中显示出不对称的模式，这可能表明存在发表偏倚。可能是这三项小型研究幸运地发现了足以显著的效应，而还有一些标准误差相似但效应较小因而不显著的未发表研究未能入选.
+
+检查不对称模式与统计显著性之间关系的一个好方法是生成等高线增强漏斗图( contour-enhanced funnel plots)。这种图有助于区分发表偏倚和其他形式的不对称。等高线增强漏斗图包括表示图中每项研究显著性水平的颜色.
+
+```{r}
+# Define fill colors for contour
+col.contour = c("gray75", "gray85", "gray95")
+
+# Generate funnel plot (we do not include study labels here)
+funnel.meta(m.gen, xlim = c(-0.5, 2),
+            contour = c(0.9, 0.95, 0.99),
+            col.contour = col.contour)
+
+# Add a legend
+legend(x = 1.6, y = 0.01, 
+       legend = c("p < 0.1", "p < 0.05", "p < 0.01"),
+       fill = col.contour)
+
+# Add a title
+title("Contour-Enhanced Funnel Plot (Third Wave Psychotherapies)")
+```
+
+然而，仅仅通过观察漏斗图来进行解释也有其局限性。没有明确的规则规定我们的结果何时 "过于不对称"，这意味着从漏斗图得出的推论总是带有一定的主观性。因此，定量评估漏斗图不对称的存在是有帮助的.
+
+#### Egger回归检验(Egger’s regression test)
+
+$$\frac{\hat\theta_k}{SE_{\hat\theta_k}} = \beta_0 + \beta_1 \frac{1}{SE_{\hat\theta_k}}$$
+
+我们关注截距$\beta_0$
+
+![](egger.png)
+
+```{r}
+# Load required package
+library(tidyverse)
+
+m.gen$data %>% 
+  mutate(y = TE/seTE, x = 1/seTE) %>% 
+  lm(y ~ x, data = .) %>% 
+  summary()
+
+metabias(m.gen, method.bias = "linreg")
+```
+
+Pustejovsky和Rodgers (2019)建议在检验标准化均值差异的漏斗图不对称时使用修正版的标准误差：
+
+$$SE^*_{\text{SMD}_{\text{between}}}= \sqrt{\frac{n_1+n_2}{n_1n_2}}$$
+
+```{r}
+# Add experimental (n1) and control group (n2) sample size
+n1 <- c(62, 72, 44, 135, 103, 71, 69, 68, 95, 
+        43, 79, 61, 62, 60, 43, 42, 64, 63)
+
+n2 <- c(51, 78, 41, 115, 100, 79, 62, 72, 80, 
+        44, 72, 67, 59, 54, 41, 51, 66, 55)
+
+# Calculate modified SE
+ThirdWave$seTE_c <- sqrt((n1+n2)/(n1*n2))
+
+# Re-run 'metagen' with modified SE to get meta-analysis object
+m.gen.c <- metagen(TE = TE, seTE = seTE_c,
+                   studlab = Author, data = ThirdWave, sm = "SMD", 
+                   fixed = FALSE, random = TRUE, 
+                   method.tau = "REML", hakn = TRUE, 
+                   title = "Third Wave Psychotherapies")
+
+# Egger's test
+metabias(m.gen.c, method = "linreg")
+
+# another way
+m.gen$n.e = n1; m.gen$n.c = n2
+
+metabias(m.gen, method.bias = "Pustejovsky")
+```
+
+#### Peters回归检验(Peters’ Regression Test)
+
+为了避免在使用二分变量效应量时出现假阳性的风险，我们可以使用Peters及其同事提出的另一种回归检验方法。为了得到Peters检验的结果，需要将对数变换后的效应大小与样本量的倒数进行回归：
+
+$$\log\psi_k =  \beta_0 + \beta_1\frac{1}{n_k}$$
+
+拟合回归模型时使用加权的线性模型，权重：
+
+$$w_k = \frac{1}{\left(\dfrac{1}{a_k+c_k}+\dfrac{1}{b_k+d_k}\right)}$$
+
+```{r}
+metabias(m.bin, method.bias = "peters")
+```
+只有当我们的meta分析包含足够多的研究时，我们才建议检测漏斗图的不对称性。当研究数量较少时，Eggers或Peters检验的统计能力可能不足以检测出真正的不对称。一般推荐K>10.
+
+#### Duval&Tweedie修整和填充法(Duval & Tweedie Trim and Fill Method)
+
+当我们知道我们的研究存在发表偏倚时，我们需要一种方法来计算偏倚校正后的真实效应量估计值。然而，我们已经知道发表偏倚无法直接测量。我们只能用小规模研究的效应来代替发表偏倚。因此，我们只能对小研究效应进行调整以获得校正效应估计值，而不能对发表偏倚本身进行调整.
+
+调整漏斗图不对称的最常用方法之一是Duval和Tweedie修剪和填充法。这种方法的原理很简单：在漏斗图对称之前，对"缺失"效应进行估算。由此产生的"扩展"数据集的合并效应量代表了校正小研究效应时的估计值。这是通过一个简单的算法实现的，涉及效应的"修剪"和"填充".
+
+- 修剪：识别漏斗图中的所有离群研究，一旦识别出这些研究，就对其进行修剪：将其从分析中剔除，然后重新计算合并效应，这一步通常使用固定效应模型；
+
+- 填充：重新计算的合并效应被假定为所有效应量的中心。对于每项修剪后的研究，增加一个额外的效应量，以反映其在漏斗另一侧的结果。例如，如果重新计算的平均效应为0.5，而一项修剪研究的效应为0.8，则镜像研究的效应为0.2。对所有经过修剪的研究进行上述处理后，漏斗图将看起来大致对称。基于所有数据，包括修剪和估算的效应量，然后再次重新计算平均效应（通常使用随机效应模型）。然后将结果作为校正后的合并效应量的估计值.
+
+一个重要注意事项是，当研究间异质性较大时，该方法无法产生可靠的结果。当研究不共享一个真实效应时，即使是大型研究也有可能严重偏离平均效应。这意味着这些研究也会被修剪和填充，尽管它们不太可能受到发表偏倚的影响。不难看出，这可能导致无效结果。
+
+```{r}
+m.gen$I2
+
+# Using all studies
+tf <- trimfill(m.gen)
+
+# Analyze with outliers removed
+tf.no.out <- trimfill(update(m.gen, 
+                             subset = -c(3, 16)))
+
+summary(tf)
+
+summary(tf.no.out)
+
+# Define fill colors for contour
+contour <- c(0.9, 0.95, 0.99)
+col.contour <- c("gray75", "gray85", "gray95")
+ld <- c("p < 0.1", "p < 0.05", "p < 0.01")
+
+# Use 'par' to create two plots in one row (row, columns)
+par(mfrow=c(1,2))
+
+# Contour-enhanced funnel plot (full data)
+funnel.meta(tf, 
+            xlim = c(-1.5, 2), contour = contour,
+            col.contour = col.contour)
+legend(x = 1.1, y = 0.01, 
+       legend = ld, fill = col.contour)
+title("Funnel Plot (Trim & Fill Method)")
+
+# Contour-enhanced funnel plot (outliers removed)
+funnel.meta(tf.no.out, 
+            xlim = c(-1.5, 2), contour = contour,
+            col.contour = col.contour)
+legend(x = 1.1, y = 0.01, 
+       legend = ld, fill = col.contour)
+title("Funnel Plot (Trim & Fill Method) - Outliers Removed")
+```
+
+#### PET-PEESE
+
+PET-PEESE实际上是两种方法的组合：精确效应检验(precision-effect test , PET)和带标准误差的精确效应估计(precision-effect estimate with standard error, PEESE)。让我们从前者开始。PET方法基于一个简单的回归模型，我们将一项研究的效应量与其标准误差进行回归：
+
+$$\theta_k =  \beta_0 + \beta_1SE_{\theta_k}$$
+
+PET使用$\beta_1$量化非对称性，但我们关注$\beta_0$。这是因为在上述公式中，截距代表所谓的极限效应(limit effect)。极限效应是标准误差为零的研究的预期效应量。这相当于在没有抽样误差的情况下测得的观察效应量。PET方法背后的理念是通过将标准误差作为预测因子来控制小规模研究的影响.
+
+$$\hat\theta_{\text{PET}} = \hat\beta_{0_{\mathrm{PET}}}$$
+
+PEESE方法的计算公式非常相似。唯一不同的是，我们使用标准误差的平方作为预测因子
+
+$$\theta_k =  \beta_0 + \beta_1SE_{\theta_k}^2$$
+
+标准误差平方背后的理念是，小型研究特别容易报告高估的效应。据推测，这一问题在统计功效大的研究中并不明显.
+
+$$\hat\theta_{\text{PET-PEESE}}=\begin{cases}
+    \mathrm{P}(\beta_{0_{\text{PET}}} = 0) <0.1~\mathrm{and}~\hat\beta_{0_{\text{PET}}} > 0: & \hat\beta_{0_{\text{PEESE}}}\\
+    \text{else}: & \hat\beta_{0_{\text{PET}}}
+  \end{cases}$$
+
+目前{meta}中还没有PET-PEESE的直接实现方法，因此我们使用线性模型函数lm编写自己的代码.
+
+```{r}
+# Build data set, starting with the effect size
+dat.petpeese <- data.frame(TE = m.gen$TE)
+
+# Experimental (n1) and control group (n2) sample size
+n1 <- c(62, 72, 44, 135, 103, 71, 69, 68, 95, 
+        43, 79, 61, 62, 60, 43, 42, 64, 63)
+
+n2 <- c(51, 78, 41, 115, 100, 79, 62, 72, 80, 
+        44, 72, 67, 59, 54, 41, 51, 66, 55)
+
+# Calculate modified SE
+dat.petpeese$seTE_c <- sqrt((n1+n2)/(n1*n2))
+
+# Add squared modified SE (= variance)
+dat.petpeese$seTE_c2 <- dat.petpeese$seTE_c^2
+
+dat.petpeese$w_k <- 1/dat.petpeese$seTE_c^2
+
+# PET
+pet <- lm(TE ~ seTE_c, weights = w_k, data = dat.petpeese)
+summary(pet)$coefficients
+
+# PEESE
+peese <- lm(TE ~ seTE_c2, weights = w_k, data = dat.petpeese)
+summary(peese)$coefficients
+```
+
+PET-PEESE可能会过度估计和校正.
+
+#### Rücker’s Limit Meta-Analysis Method
+
+Rücker法背后的理念是建立一个meta分析模型，明确考虑小研究效应导致的偏差。我们考虑到当存在小研究效应时，研究的效应量和标准误差并不是独立的。之所以这样假设，是因为我们知道发表偏倚尤其会影响小型研究，因此小型研究的效应量会大于大型研究.
+
+$$\hat\theta_k = \mu_* + \theta_{\text{Bias}}(\epsilon_k+\zeta_k)\\\mathrm{E}(\hat\theta_k) \rightarrow \mu_{*} + \theta_{\text{Bias}}\zeta_k ~ ~ ~ ~ \text{as} ~ ~ ~ ~ \epsilon_k \rightarrow 0\\\hat\theta_{*} =  \mu_* + \theta_{\mathrm{Bias}}\tau\\\hat\theta_{{*}_k} =  \mu_* + \sqrt{\dfrac{\tau^2}{SE^2_k + \tau^2}}(\hat\theta_k - \mu_*)$$
+Rücker法相比PET-PEESE的优势就是纳入了异质性$\tau^2$.
+
+```{r}
+# Install 'metasens', then load from library
+library(metasens)
+
+# Run limit meta-analysis
+limitmeta(m.gen)
+
+# Create limitmeta object
+lmeta <- limitmeta(m.gen)
+
+# Funnel with curve
+funnel.limitmeta(lmeta, xlim = c(-0.5, 2))
+
+# Funnel with curve and shrunken study estimates
+funnel.limitmeta(lmeta, xlim = c(-0.5, 2), shrunken = TRUE)
+
+# binary data
+limitmeta(m.bin)
+```
+
+### P曲线(P-Curve)
+
+发表偏倚在很多情况下是由p值引起的。p曲线关注的是p值的分布，能够应对p-hacking的问题。p曲线法的基础是p值直方图的形状取决于研究的样本大小，更重要的是取决于我们数据背后的真实效应大小.
+
+![](pcurve-1.png)
+
+当出现p-hacking时，接近0.05的p值出现的频率会变多。p曲线分析不关注发表偏倚本身，而是关注证据价值(evidential value)，我们希望确保我们估计的效应不是虚假的；不是选择性报告造成的假象.
+
+#### 证据价值检验
+
+为了评估证据价值的存在，p曲线使用两种类型的检验：右偏检验(test for right-skewness)和33%功效检验(test for 33% power).
+
+如果p值分布呈右偏态，说明我们的结果是由真实的效应驱动的。右偏检验使用二项检验(binomial test).
+
+```{r}
+k <- 7   # number of studies p<0.025
+n <- 8   # total number of significant studies
+p <- 0.5 # assumed probability of k (null hypothesis)
+
+binom.test(k, n, p, alternative = "greater")$p.value
+```
+
+但是这种检验方法会丢失很多信息，因此我们使用另一种方法。我们计算每个p值的p值(pp-value)。pp值表示当p值服从均匀分布(p曲线是平的)时得到此值的可能性。使用Fisher法进行检验(Fisher’s method).
+
+$$\chi^2_{2K} = -2 \sum^K_{k=1} \log(pp_k)$$
+
+```{r}
+p <- c(0.001, 0.002, 0.003, 0.004, 0.03)
+pp <- p*20
+
+# Show pp values
+pp
+
+chi2 <- -2*sum(log(pp))
+chi2
+
+pchisq(26.96, df = 10, lower.tail = FALSE)
+
+```
+
+上述检验取决于我们数据的统计功效。因此，当右偏态检验不显著时，并不自动意味着没有证据价值。解决方案是33%功效检验，理念简单说就是检验曲线是否是平的.
+
+```{r}
+library(dmetar)
+library(meta)
+
+# Update m.gen to exclude outliers
+m.gen_update <- update.meta(m.gen, subset = -c(3, 16))
+
+# Run p-curve analysis
+pcurve(m.gen_update)
+
+```
+
+这些结果表明了证据价值的存在，以及存在真正的非零效应。我们仍然不能排除发表偏倚对meta分析结果的影响。有趣的是，这一发现与我们使用一些小研究效应方法得出的结果并不一致.
+
+p曲线的效应量估计
+
+```{r}
+# Add experimental (n1) and control group (n2) sample size
+# Sample sizes of study 3 and 16 removed
+n1 <- c(62, 72, 135, 103, 71, 69, 68, 95, 
+        43, 79, 61, 62, 60, 43, 64, 63)
+
+n2 <- c(51, 78, 115, 100, 79, 62, 72, 80, 
+        44, 72, 67, 59, 54, 41, 66, 55)
+
+# Run p-curve analysis with effect estimation
+pcurve(m.gen_update, 
+       effect.estimation = TRUE,
+       N = n1+n2, 
+       dmin = 0,
+       dmax = 1)
+```
+
+### 选择模型(Selection Models)
+
+选择模型可以看作是之前方法的通用版本。它们可以对我们认为发表偏倚影响结果的任何过程进行建模.
+
+所有选择模型背后的理念都是指定一个分布，该分布通常以一种高度理想化的方式预测某项研究根据其结果被发表（即"被选择"）的可能性有多大。通常，这个结果就是该研究的p值，选择模型可以看成是一个函数，它返回不同p值下的发表概率。一旦定义了这样一个选择函数，就可以用它来"去除"由于选择性发表而产生的假定偏倚，并得出真实效应量的校正估计值.
+
+选择模型是一种非常通用的方法，可用于模拟不同的发表偏倚过程。然而，只有当假定的模型足够充分时，它们才能提供有效的结果，而且通常需要大量的研究。一个非常简单的选择模型，即三参数模型，也可用于较小的数据集.
+
+#### 阶跃函数选择模型(Step Function Selection Models)
+
+$$f^*(x_k) = \frac{w(p_k)f(x_k)}{\int w(p_k) f(x_k) dx_k} \\  w(p_k) =\begin{cases}
+    \omega_1~~~\text{if}~~~0 \leq p_k \leq a_1 \\
+    \omega_2~~~\text{if}~~~a_1 \leq p_k \leq a_2 \\
+    \omega_3~~~\text{if}~~~a_2 \leq p_k \leq a_3 \\
+    \omega_4~~~\text{if}~~~a_3 \leq p_k \leq a_4~~~(\text{where}~~~a_4=1)\end{cases}$$
+
+
+```{r}
+library(metafor)
+
+# Three-Parameter Selection Model
+
+# We name the new object 'm.rma'
+m.rma <- rma(yi = TE,        
+             sei = seTE,
+             data = ThirdWave,
+             slab = Author,
+             method = "REML",
+             test = "knha")
+
+selmodel(m.rma,
+         type = "stepfun",
+         steps = 0.025)
+
+selmodel(m.rma,
+         type = "stepfun",
+         steps = 0.05)
+
+# Fixed Weights Selection Model
+
+# Define the cut-points
+a <- c(0.005, 0.01, 0.05, 0.10, 0.25, 0.35, 0.50, 
+       0.65, 0.75, 0.90, 0.95, 0.99, 0.995)
+
+# Define the selection likelihood for each interval 
+# (moderate/severe selection)
+w.moderate <- c(1, 0.99, 0.95, 0.80, 0.75, 0.65, 0.60, 
+                0.55, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50)
+w.severe <- c(1, 0.99, 0.90, 0.75, 0.60, 0.50, 0.40, 0.35, 
+              0.30, 0.25, 0.10, 0.10, 0.10, 0.10)
+
+# Fit model assuming moderate selection
+selmodel(m.rma, type = "stepfun", steps = a, delta = w.moderate)
+
+# Fit model assuming severe selection
+selmodel(m.rma, type = "stepfun", steps = a, delta = w.severe)
+```
+
+不同发表偏倚的检验方法各有优劣，结果也可能大相径庭。最好的办法是各种方法都进行检验，但是要谨慎解释检验结果。重要的是要记住，**控制发表偏倚的最佳方法是充分搜索未发表的证据**.
+
+# 多层meta分析(“Multilevel” Meta-Analysis)
+
+实际上我们之前讨论的meta分析就是一种“分层”的模型.
+
+![](multilevel-model_col_sep.png)
+
+为了更好地捕捉产生我们数据的某些机制，可以进一步扩展这一结构。这就是三层次模型(three-level models).
+
+统计独立性是我们在荟萃分析中汇集效应大小的核心假设之一。如果效应大小之间存在依赖性(即效应大小相关)，则会人为地降低异质性，从而导致假阳性结果。这个问题被称为分析单位误差(unit-of-analysis error)，我们之前已经讨论过。效应量依赖性可能来自不同的来源:
+
+- 个别研究的作者引入的依赖性。例如，进行研究的科学家可能从多个地点收集数据，将多种干预措施与单一对照组进行比较，或使用不同的问卷来测量同一结果。在所有这些情况下，我们都可以假设报告数据中引入了某种依赖性
+
+- Meta分析本身引入的依赖性。举例来说，Meta分析的重点是某种心理机制。该Meta分析包括在世界不同文化区域(如东亚和西欧社会)进行的研究。根据心理机制的类型，在同一文化区域进行的研究结果可能与在不同文化区域进行的研究结果更为相似.
+
+我们可以通过在Meta分析模型的结构中加入第三层来考虑这种依赖关系。例如，我们可以将基于不同问卷的效应量嵌套在研究中。或者我们也可以创建一个模型，将研究结果嵌套在文化区域中。这样就形成了一个三级Meta分析模型，如下图所示
+
+![](multilevel-model2_col_sep.png)
+
+三层模型如下：
+
+$$\hat\theta_{ij} = \theta_{ij} + \epsilon_{ij}\\\theta_{ij} = \kappa_{j} + \zeta_{(2)ij}\\\kappa_{j} = \mu + \zeta_{(3)j}$$
+
+$$\hat\theta_{ij} = \mu + \zeta_{(2)ij} + \zeta_{(3)j} + \epsilon_{ij}$$
+
+下面我们将使用{metafor}包拟合分层模型.
+
+```{r}
+library(metafor)
+
+# Load data set from 'dmetar'
+library(dmetar)
+data("Chernobyl")
+
+head(Chernobyl)
+```
+
+该数据集的一个奇特之处在于它包含了作者的重复条目。这是因为meta分析中的大多数研究贡献了一个以上的观察效应大小。从这个结构来看，我们的数据集中的效应大小显然不是独立的。它们遵循嵌套结构，其中各种效应大小嵌套在一项研究中。因此，为了充分模拟我们数据中的这些依赖关系，拟合一个三级meta分析可能是一个好主意.
+
+```{r}
+full.model <- rma.mv(yi = z, 
+                     V = var.z, 
+                     slab = author,
+                     data = Chernobyl,
+                     random = ~ 1 | author/es.id, #~ 1 | cluster/effects_within_cluster
+                     test = "t", 
+                     method = "REML")
+
+summary(full.model)
+
+library(esc)
+convert_z2r(0.52)
+```
+
+### 层间方差的分布
+
+我们可以通过计算多层次版本的I^2来回答这个问题。在传统的meta分析中，I^2代表不可归因于抽样误差的变异量，即研究间异质性。在三级模型中，这种异质性方差被分成两部分：一部分归因于组内真实效应大小差异，另一部分归因于组间差异。因此，有两个I^2值，量化了与第2级或第3级相关的总变异的百分比.
+
+```{r}
+i2 <- var.comp(full.model)
+summary(i2)
+
+plot(i2)
+```
+
+### 模型比较
+
+根据奥卡姆剃刀原理(Occam’s razor)，我们应当选择尽量简单的模型.
+
+{metafor}软件包可以将我们的三层次模型与去掉一个层次的模型进行比较。为此，我们再次使用rma.mv函数，但这次要将一个水平的方差分量设为零.
+
+```{r}
+l3.removed <- rma.mv(yi = z, 
+                     V = var.z, 
+                     slab = author,
+                     data = Chernobyl,
+                     random = ~ 1 | author/es.id, 
+                     test = "t", 
+                     method = "REML",
+                     sigma2 =  c(0, NA))
+
+summary(l3.removed)
+
+anova(full.model, l3.removed)
+```
+
+## 亚组分析
+
+一旦我们设定了三级模型，就有可能评估总体效应的假定调节因子。在前文中，我们发现亚组分析可以表示为带有哑编码预测因子的meta回归模型。类似地，我们可以在 "多水平 "模型中加入回归项，从而得到三水平混合效应模型(three-level mixed-effects model)：
+
+$$\hat\theta_{ij} = \theta + \beta x_i + \zeta_{(2)ij} + \zeta_{(3)j} + \epsilon_{ij}$$
+
+```{r}
+mod.model <- rma.mv(yi = z, V = var.z, 
+                    slab = author, data = Chernobyl,
+                    random = ~ 1 | author/es.id, 
+                    test = "t", method = "REML",
+                    mods = ~ radiation)
+
+summary(mod.model)
+```
+
+## 稳健方差估计(Robust Variance Estimation)
+
+与"传统"meta分析相比，我们之前拟合的分层模型显然能更好地代表我们的数据，因为meta分析假定所有效应量都是完全独立的。但这仍然是对现实的简化。在实践中，效应量之间往往存在着比我们的嵌套模型更复杂的依赖关系.
+
+当我们回到切尔诺贝利数据集时，我们已经看到了这一点。在数据中，大多数研究提供了一个以上的效应量，但不同研究之间的原因不同。一些研究比较了辐射对不同目标人群的影响，因此报告了不止一个效应大小。其他研究对同一样本使用了不同的方法，这也意味着研究提供了不止一个效应大小.
+
+当一项研究中的多个效应量来自同一样本时，我们预计它们的抽样误差是相关的。然而，我们的三层次模型还没有考虑到这一点。我们的上述模型假定，在群组/研究内部，抽样误差之间的相关性(以及协方差)为零。或者换句话说，它假设在一个群组或研究中，效应量估计值是独立的.
+
+因此，我们将用一些时间来讨论一个扩展的三层次结构，即所谓的相关分层效应(Correlated and Hierarchical Effects, CHE) 模型。与我们之前的三层次模型一样，CHE模型允许根据某些共性(例如，因为它们来自相同的研究、工作组、文化区域等)将多个效应量组合成更大的群组。
+
+此外，该模型还明确考虑到群组中的某些效应量基于相同的样本(如进行了多次测量)，因此它们的抽样误差是相关的。因此，在许多实际情况下，CHE模型应该是一个很好的起点；特别是当我们的数据依赖结构很复杂，或者只有部分已知时.
+
+除了CHE模型，我们还将讨论meta分析中的稳健方差估计(Robust Variance Estimation, RVE)。这是一套过去经常用于处理meta分析中依赖效应大小的方法。RVE的核心是所谓的Sandwich估计法。该估计法可与CHE模型以及其他模型结合使用，以获得稳健的置信区间和P值；即使我们所选的模型不能很好地捕捉数据错综复杂的依赖结构.
+
+### Sandwich方差估计法
+
+我们在此介绍的稳健方差估计器只是"正常"回归模型中使用的原始方法的一个特殊版本。Hedges、Tipton和Jackson(2010)提出了一种经过调整的RVE类型，可用于具有依赖效应大小的meta回归模型，这种方法在过去几年中得到了发展.
+
+为了理解它，我们首先要再看一下meta回归的公式
+
+$$\boldsymbol{T}_{j}=\boldsymbol{X}_{j}\boldsymbol{\beta} + \boldsymbol{u}_j +\boldsymbol{e}_j$$
+
+$$\begin{bmatrix}\boldsymbol{T}_1 \\\boldsymbol{T}_2 \\\vdots \\\boldsymbol{T}_J\end{bmatrix}=\begin{bmatrix}\boldsymbol{X}_1 \\\boldsymbol{X}_2 \\\vdots \\\boldsymbol{X}_J\end{bmatrix}\boldsymbol{\beta}+\begin{bmatrix}\boldsymbol{u}_1 \\\boldsymbol{u}_2 \\\vdots \\\boldsymbol{u}_J\end{bmatrix}+\begin{bmatrix}\boldsymbol{e}_1 \\\boldsymbol{e}_2 \\\vdots \\\boldsymbol{e}_J\end{bmatrix}$$
+
+$$\boldsymbol{V}^{\text{R}}_{\boldsymbol{\hat\beta}} =
+\left(\sum^J_{j=1}\boldsymbol{X}_j^\top\boldsymbol{W}_j\boldsymbol{X}_j \right)^{-1}
+\left(\sum^J_{j=1}\boldsymbol{X}_j^\top\boldsymbol{W}_j \boldsymbol{A}_j\Phi_j \boldsymbol{A}_j \boldsymbol{W}_j \boldsymbol{X}_j \right)
+\left(\sum^J_{j=1}\boldsymbol{X}_j^\top\boldsymbol{W}_j\boldsymbol{X}_j \right)^{-1}$$
+
+### 使用RVE拟合CHE模型
+
+```{r}
+library(clubSandwich)
+
+# constant sampling correlation assumption
+rho <- 0.6
+
+# constant sampling correlation working model
+V <- with(Chernobyl, 
+          impute_covariance_matrix(vi = var.z,
+                                   cluster = author,
+                                   r = rho))
+
+che.model <- rma.mv(z ~ 1 + radiation,
+                    V = V,
+                    random = ~ 1 | author/es.id,
+                    data = Chernobyl,
+                    sparse = TRUE)
+
+conf_int(che.model, vcov = "CR2")
+coef_test(che.model, vcov = "CR2")
+```
+
+## Cluster Wild Bootstrapping
+
+另一种有时也是检验我们模型中系数的有利方法是自助抽样(Bootstrapping)程序，其特殊的变体是所谓的Cluster Wild Bootstrapping。如果meta分析中的研究总数较少，这种方法就非常适合；特别是与RVE相比，RVE在小样本中会导致过于保守的结果(正如我们在切尔诺贝利的例子中看到的那样).
+
+Wild bootstrap是一种基于空模型残差的方法，该方法的基本算法是：计算出全模型及相应统计量(如t,F)，根据原始数据拟合一个空模型并提取其残差e，对于每个群组或研究从分布中随机抽取再乘以该组残差，在原始数据的基础上，将转换后的残差与空模型的预测值相加，生成新的重抽样效应量，使用重抽样效应量再次拟合完整模型；再次计算检验统计量
+
+```{r}
+# Make sure {wildmeta} and {tidyverse} is loaded
+library(wildmeta)
+library(tidyverse)
+
+# Add year as extra variable
+Chernobyl$year <- str_extract(Chernobyl$author, 
+                              "[0-9]{4}") %>% as.numeric()
+
+che.model.bs <- rma.mv(z ~ 0 + radiation + scale(year),
+                       V = V,
+                       random = ~ 1 | author/es.id,
+                       data = Chernobyl,
+                       sparse = TRUE)
+
+rad.constraints <- constrain_equal(constraints = 1:3,
+                                   coefs = coef(che.model.bs))
+rad.constraints
+
+cw.boot <- Wald_test_cwb(full_model = che.model.bs,
+                         constraints = rad.constraints,
+                         adjust = "CR2",
+                         R = 100)
+cw.boot
+
+# visualize the density of the test statistics
+plot(cw.boot, 
+     fill = "lightblue", 
+     alpha = 0.5)
+```
+
+# 结构方程模型meta分析
+
+多层次模型视为结构方程模型(structural equation model, SEM)的一种特殊形式。正如我们所了解的，每一个meta分析都是基于多层次模型的。因此，我们也可以将meta分析视为结构方程模型，其中合并效应量被视为一个潜变量。简而言之：meta分析是多层次模型，因此也可以表示为结构方程模型.
+
+SEMmeta分析可以让我们建立更复杂的模型，我们可以建立因子分析(factor analysis)模型和多变量meta分析(multivariate meta-analysis).
+
+当然，应用SEM元分析技术的前提是对结构方程模型有基本的了解.
+
+## meta分析的结构方程模型
+
+SEM是一种统计技术，用于检验观测变量和潜变量之间关系的假设。在SEM中，观测变量和潜变量之间的假定关系（"结构"）通过观测变量来建模，同时考虑其测量误差.
+
+通常情况下，SEM是通过一系列矩阵表示的。可视化的SEM可以表示为路径图。这种路径图通常非常直观，解释起来也很简单.
+
+![](E:/R/defn.png)
+
+通过矩阵表示SEM有多种方法。在此，我们将重点讨论网状行动模型(Reticular Action Model, RAM)。主要需要三个矩阵: A,S,F.
+
+现在，我们将结合meta分析模型和SEM知识，将meta分析表述为结构方程模型
+
+随机效应模型
+
+level 1
+$$\hat\theta_k = \theta_k + \epsilon_k$$
+level 2
+$$\theta_k = \mu + \zeta_k$$
+
+![](REM_SEM_sep.png)
+
+为了真正发挥meta分析SEM的多功能性，需要采用两阶段方法。在两阶段结构方程模型(Two-Stage Structural Equation Modeling, TSSEM)中，我们首先合并每项研究的效应量。通常，这些效应量是我们希望用于建模的几个变量之间的相关系数.
+
+$$\begin{align}\boldsymbol{r_k} &= \boldsymbol{\rho} + \boldsymbol{\zeta_k} + \boldsymbol{\epsilon_k} \notag \\\begin{bmatrix} r_1 \\ r_2 \\ \vdots \\ r_p \end{bmatrix} &=\begin{bmatrix} \rho_1 \\ \rho_2 \\ \vdots \\ \rho_p \end{bmatrix} +\begin{bmatrix} \zeta_1 \\ \zeta_2 \\ \vdots \\ \zeta_p \end{bmatrix} +\begin{bmatrix} \epsilon_1 \\ \epsilon_2 \\ \vdots \\\epsilon_p\end{bmatrix}\end{align}$$
+
+第一个步骤可以评估研究间效应的异质性，以及是否应该使用随机效应模型或亚组分析。由于{metaSEM}软件包采用了基于最大似然法的方法，即使是部分数据缺失的研究也可以纳入这一步.
+
+在第二步中，我们使用加权最小二乘法来拟合我们指定的结构方程模型.
+
+$$F_{\text{WLS}}(\hat\theta) =  (\boldsymbol{r} - \rho(\hat\theta))^\top \boldsymbol{V}^{-1} ({r} - \rho(\hat\theta))$$
+
+## 多变量Meta分析(Multivariate Meta-Analysis)
+
+是时候深入研究我们的第一个meta分析SEM示例了。我们将首先使用SEM方法进行多变量meta分析，这是我们尚未涉及的内容。在多变量meta分析中，我们试图同时估计不止一个效应。如果我们研究的目标有多个主要结果，而不仅仅是一个结果，那么这种类型的meta分析就很有帮助.
+
+想象一下，我们正在研究某种治疗方法的效果。对于这种治疗，可能有两类结果被大多数专家认为是重要的，因此在大多数研究中都会对它们进行评估。多变量meta分析可以通过在一个模型中联合估计两种结果的效应量来解决这个问题。这种多变量方法还允许我们考虑两个结果之间的相关性。这可以用来确定在一个结果上具有高效应量的研究是否在另一个结果上也具有更高的效应量。或者，我们也可能发现两个结果之间存在负相关或根本不相关.
+
+```{r}
+# install.packages('metaSEM')
+library(metaSEM)
+
+library(tidyverse) # needed for 'glimpse'
+library(dmetar)
+library(meta)
+
+data(ThirdWave)
+glimpse(ThirdWave)
+
+# Define vector with effects on anxiety (Hedges g)
+Anxiety <- c(0.224,0.389,0.913,0.255,0.615,-0.021,0.201, 
+             0.665,0.373,1.118,0.158,0.252,0.142,NA, 
+             0.410,1.139,-0.002,1.084)
+
+# Standard error of anxiety effects
+Anxiety_SE <- c(0.193,0.194,0.314,0.165,0.270,0.233,0.159,
+                0.298,0.153,0.388,0.206,0.256,0.256,NA,
+                0.431,0.242,0.274,0.250)
+
+# Covariance between stress and anxiety outcomes
+Covariance <- c(0.023,0.028,0.065,0.008,0.018,0.032,0.026, 
+                0.046,0.020,0.063,0.017,0.043,0.037,NA, 
+                0.079,0.046,0.040,0.041)
+
+ThirdWaveMV <- data.frame(Author = ThirdWave$Author,
+                          Stress = ThirdWave$TE,
+                          Stress_var = ThirdWave$seTE^2,
+                          Anxiety = Anxiety,
+                          Anxiety_var = Anxiety_SE^2,
+                          Covariance = Covariance)
+
+format(head(ThirdWaveMV), digits = 2)
+# 如果我们不知道协方差就需要假定两个变量的相关系数，并进行敏感性分析
+```
+
+### 模型定义
+
+```{r}
+m.mv <- metaSEM::meta(y = cbind(Stress, Anxiety), 
+             v = cbind(Stress_var, Covariance, Anxiety_var),
+             data = ThirdWaveMV)
+#若同时加载了{meta}可能会报错
+
+summary(m.mv)
+
+#若OpenMx Status不是0或1则需要
+#rerun(m.mv)
+
+tau.coefs <- coef(m.mv, select = "random")
+
+# Create matrix
+tc.mat <- vec2symMat(tau.coefs)
+
+# Label rows and columns
+dimnames(tc.mat)[[1]] <- dimnames(tc.mat)[[2]] <- c("Stress", 
+                                                    "Anxiety")
+tc.mat
+
+cov2cor(tc.mat)
+
+#使用Wald法估计置信区间可能出现小样本偏差，可以设置intervals.type为似然法
+#m.mv <- meta(y = cbind(Stress, Anxiety), v = cbind(Stress_var, Covariance, Anxiety_var),data = ThirdWaveMV,intervals.type = "LB")
+
+#拟合固定效应模型
+#m.mv <- meta(y = cbind(Stress, Anxiety), v = cbind(Stress_var, Covariance, Anxiety_var), data = ThirdWaveMV, RE.constraints = matrix(0, nrow=2, ncol=2))
+
+plot(m.mv, 
+     axis.labels = c("Perceived Stress", "Anxiety"), 
+     randeff.ellipse.col = "#014d64",
+     univariate.arrows.col = "gray40",
+     univariate.arrows.lwd = 9,
+     univariate.polygon.col = "gray40",
+     estimate.ellipse.col = "gray40",
+     estimate.col = "firebrick")
+```
+
+## 验证性因素分析(Confirmatory Factor Analysis)
+
+验证性因子分析(CFA)是一种流行的SEM方法，通过该方法可以明确观测变量与假定潜变量之间的关系。CFA通常用于评估问卷或其他类型评估的心理测量特性。它使研究人员能够确定评估变量是否确实测量了他们想要测量的潜变量，以及几个潜变量之间的关系.
+
+在本例中，我们希望验证一份（虚构的）睡眠问题问卷的潜在因素结构。该问卷被假定为测量两个不同的潜在变量，分别描述睡眠问题的特征：失眠(insomnia)和倦怠(lassitude)。Koffel和Watson(2009)认为，睡眠问题确实可以用这两个潜在因素来描述。我们模拟了11项研究的结果，其中对我们假想的睡眠问卷进行了评估。我们将该数据集命名为SleepProblems。每项研究都包含由我们的问卷直接测量的睡眠主诉症状之间的相互关系。这些测量指标包括sleep quality, sleep latency, sleep efficiency, daytime dysfunction和 hypersomnia。我们假设前三个症状是相关的，因为它们都测量失眠这一潜在变量，而daytime dysfunction和hypersomnia是相关的，因为它们是倦怠因素的症状.
+
+![](CFA_Graph-1_sep.png)
+
+```{r}
+data(SleepProblems)
+names(SleepProblems)
+names(SleepProblems$data)
+SleepProblems$data$`Coleman et al. (2003)`
+
+# Stage 1
+# pool our correlation matrices using the tssem1 function
+cfa1 <- tssem1(SleepProblems$data, 
+               SleepProblems$n, 
+               method="REM",
+               RE.type = "Diag") #we assume that the random effects are independent
+
+summary(cfa1)
+
+# Extract the fixed coefficients (correlations)
+fixed.coefs <- coef(cfa1, "fixed")
+
+# Make a symmetric matrix
+fc.mat <- vec2symMat(fixed.coefs, diag = FALSE)
+
+# Label rows and columns
+dimnames(fc.mat)[[1]] <- c("Quality", "Latency", 
+                           "Efficiency", "DTDysf", "HypSomnia")
+dimnames(fc.mat)[[2]] <- c("Quality", "Latency", 
+                           "Efficiency", "DTDysf", "HypSomnia")
+
+# Print correlation matrix (3 digits)
+round(fc.mat, 3)
+
+# Stage 2
+# Create vector of column/row names
+dims <- c("Quality", "Latency", "Efficiency", 
+          "DTDysf", "HypSomnia", "f_Insomnia", "f_Lassitude")
+
+# Create 7x7 matrix of zeros
+mat <- matrix(rep(0, 7*7), nrow = 7, ncol = 7)
+
+# Label the rows and columns
+dimnames(mat)[[1]] <- dimnames(mat)[[2]] <- dims
+mat
+
+A <- matrix(c(0, 0, 0, 0, 0, "0.3*Ins_Q", 0          ,
+              0, 0, 0, 0, 0, "0.3*Ins_L", 0          ,
+              0, 0, 0, 0, 0, "0.3*Ins_E", 0          ,
+              0, 0, 0, 0, 0, 0          , "0.3*Las_D",
+              0, 0, 0, 0, 0, 0          , "0.3*Las_H",
+              0, 0, 0, 0, 0, 0          , 0          ,
+              0, 0, 0, 0, 0, 0          , 0
+              ), nrow = 7, ncol = 7, byrow=TRUE)
+
+# Label columns and rows
+dimnames(A)[[1]] <- dimnames(A)[[2]] <- dims
+A <- as.mxMatrix(A)
+
+# Make a diagonal matrix for the variances
+Vars <- Diag(c("0.2*var_Q", "0.2*var_L", 
+               "0.2*var_E", "0.2*var_D", "0.2*var_H"))
+
+# Make the matrix for the latent variables
+Cors <- matrix(c(1, "0.3*cor_InsLas",
+                 "0.3*cor_InsLas", 1),
+               nrow=2, ncol=2)
+
+# Combine
+S <- bdiagMat(list(Vars, Cors))
+
+# Label columns and rows
+dimnames(S)[[1]] <- dimnames(S)[[2]] <- dims
+S <- as.mxMatrix(S)
+
+# Construct diagonal matrix
+F <- Diag(c(1, 1, 1, 1, 1, 0, 0))
+
+# Only select non-null rows
+F <- F[1:5,]
+
+# Specify row and column labels
+dimnames(F)[[1]] <- dims[1:5]
+dimnames(F)[[2]] <- dims
+
+F <- as.mxMatrix(F)
+
+# Model Fitting
+cfa2 <- tssem2(cfa1, 
+               Amatrix = A, 
+               Smatrix = S, 
+               Fmatrix = F, 
+               diag.constraints = FALSE)
+summary(cfa2)
+
+library(semPlot)
+cfa.plot <- meta2semPlot(cfa2)
+# Create Plot labels (left to right, bottom to top)
+labels <- c("Sleep\nQuality",
+            "Sleep\nLatency",
+            "Sleep\nEfficiency",
+            "Daytime\nDysfunction",
+            "Hyper-\nsomnia","Insomnia", 
+            "Lassitude")
+
+# Plot
+semPaths(cfa.plot, 
+         whatLabels = "est", 
+         edge.color = "black", 
+         nodeLabels = labels,
+         sizeMan = 10, 
+         sizeLat = 10, 
+         edge.label.cex = 1)
+```
+
+# 网络Meta分析(Network Meta-Analysis)
+
+在临床研究中，为了研究某个干预/药物是否有效，我们通常会将实验组与对照组(安慰剂等)比较。然而在许多研究领域，并非只有一种"确定"的治疗方法，而是有多种治疗方法。例如，偏头痛可以用各种药物治疗，也存在非药物治疗方案。特别是在"成熟"的研究领域，证明某种治疗方法是有效的往往不那么重要。相反，我们希望找出哪种治疗方法对某些特定的适应症最有效.
+
+这就带来了新的问题。在传统的meta分析中，要评估几种治疗方法的比较效果，就必须有两种治疗方法之间的充分正面比较。可惜，在许多研究领域中，经常会发现只有极少数试验直接比较了两种治疗方法的效果，而没有"较弱"的对照组。不过，虽然两种或多种治疗方法之间可能不存在直接比较，但通常可以获得间接证据。不同的治疗方法可能在不同的试验中进行过评估，但所有这些试验可能都使用了相同的对照组.
+
+网络meta分析可用于纳入此类间接比较，从而使我们能够同时比较几种干预措施的效果。网络meta分析也被称为混合治疗比较meta分析(mixed-treatment comparison meta-analysis)。这是因为它将多种直接和间接治疗比较整合到一个模型中，该模型可表示为一个比较"网络".
+
+## 网络meta分析
+
+### 直接和间接证据(Direct & Indirect Evidence)
+
+首先，我们必须理解治疗"网络"的含义。假设我们从某项随机对照试验i中提取了数据，该试验比较了治疗A和另一种条件B(如等待对照组wait-list control group)的效果。我们可以用图来说明这种比较：
+
+![](graph1_col_sep.png)
+
+这条线叫做边(edge)。这条边代表了A和B之间的关系.
+
+![](graph2_col_sep.png)
+
+B称为参照组(reference group)，在两个比较中B都作为对照.
+
+![](graph3_col_sep.png)
+
+B称为A,C之间的桥(bridge).
+
+$$\hat\theta_{\text{A,C}}^{\text{indirect}} = \hat\theta_{\text{B,A}}^{\text{direct}} - \hat\theta_{\text{B,C}}^{\text{direct}}$$
+
+$$\text{Var} \left(\hat\theta_{\text{A,C}}^{\text{indirect}} \right) = \text{Var} \left(\hat\theta_{\text{B,A}}^{\text{direct}} \right) + \text{Var} \left(\hat\theta_{\text{B,C}}^{\text{direct}} \right)$$
+该公式需要满足*传递性假设(the assumption of transitivity)*，即*网络一致性(network consistency)*.
+
+### 传递性和一致性(Transitivity & Consistency)
+
+传递性假设的核心原则是，我们可以将直接证据(如来自AB和CB的比较)与相关比较的间接证据(如 AC)结合起来。这一假设与随机效应模型的可交换性(exchangeability)有关.
+
+关键的假设是，比较(如AB)的效果可以在试验之间交换。传递性在统计学上就是一致性.
+
+$$\theta_{\text{A,B}}^{\text{indirect}} = \theta_{\text{A,B}}^{\text{direct}}$$
+
+### 网络meta分析模型
+
+实际中的网络往往很复杂，如下：
+
+![](graph4_col_sep.png)
+
+根据组合原理，如果有S种治疗，则有C=S(S-1)/2组比较。因此，我们需要一个计算模型，让我们能以高效、内部一致的方式汇集所有可用的网络数据。针对网络meta分析开发了多种统计方法。在接下来的章节中，我们将讨论频率学模型(frequentist)和贝叶斯层次模型(Bayesian hierarchical model)，以及如何在R中实现这些模型.
+
+## 频率学模型(Frequentist Network Meta-Analysis)
+
+这一模型基于*概率的频率学派*的理论.
+
+### 图论模型(The Graph Theoretical Model)
+
+假设有K个试验，M组比较。所有效应量为$\boldsymbol{\hat\theta} = (\hat\theta_1, \hat\theta_2, \dots, \hat\theta_M)$。模型如下
+
+$$\begin{align} \boldsymbol{\hat\theta} &= \boldsymbol{X}\boldsymbol{\theta}_{\text{treat}} + \boldsymbol{\epsilon} \notag \\\begin{bmatrix}\hat\theta_{1\text{,A,B}} \\\hat\theta_{2\text{,A,C}} \\\hat\theta_{3\text{,A,D}} \\\hat\theta_{4\text{,B,C}} \\\hat\theta_{5\text{,B,D}} \\\end{bmatrix}&=\begin{bmatrix}1 & -1 & 0 & 0 \\1 & 0 & -1 & 0 \\1 & 0 & 0 & -1 \\0 & 1 & -1 & 0 \\0 & 1 & 0 & -1 \\\end{bmatrix}\begin{bmatrix}\theta_{\text{A}} \\\theta_{\text{B}} \\\theta_{\text{C}} \\\theta_{\text{D}} \\\end{bmatrix}+\begin{bmatrix}\epsilon_{1} \\\epsilon_{2} \\\epsilon_{3} \\\epsilon_{4} \\\epsilon_{5} \\\end{bmatrix}\end{align}$$
+
+由于X是满秩矩阵，模型是参数过度的.
+
+{netmeta}中的图论方法提供了解决方案。我们就不赘述这种方法背后繁琐的数学细节了，尤其是{netmeta}软件包会为我们完成这些繁重的工作。我们只需指出，这种方法涉及构建所谓的摩尔-彭罗斯伪逆矩阵(Moore-Penrose pseudoinverse matrix)，然后使用加权最小二乘法计算网络模型的拟合值.
+
+该程序也适用于多臂研究(multi-arm)，即进行了不止一次成对比较的研究(即对两个以上的条件进行比较的研究).
+
+网络模型计算了用以表示非一致性的I^2：
+
+$$I^2 = \text{max} \left(\frac{Q_{\text{total}}-\text{d.f.}} {Q_{\text{total}}}, 0 \right)\\\text{d.f.} = \left( \sum^K_{k=1}p_k-1 \right)- (n-1)$$
+
+```{r}
+install.packages('netmeta')
+library(netmeta)
+
+library(dmetar)
+data(TherapyFormats) #CBT for depression
+
+head(TherapyFormats[1:5])
+
+as.matrix(table(TherapyFormats$author))
+
+# fit the model
+m.netmeta <- netmeta(TE = TE,
+                     seTE = seTE,
+                     treat1 = treat1,
+                     treat2 = treat2,
+                     studlab = author,
+                     data = TherapyFormats,
+                     sm = "SMD", #type of effect size
+                     fixed = TRUE,
+                     random = FALSE,
+                     reference.group = "cau",
+                     details.chkmultiarm = TRUE,
+                     sep.trts = " vs ") #分隔符
+summary(m.netmeta)
+```
+
+由于显著的不一致性，我们需要使用完全设计-治疗交互随机效应模型(full design-by-treatment interaction random-effects model).
+
+```{r}
+decomp.design(m.netmeta)
+```
+
+可视化
+
+```{r}
+# Replace with full name (see treat1.long and treat2.long)
+long.labels <- c("Care As Usual", "Group", 
+                 "Guided Self-Help", 
+                 "Individual", "Telephone", 
+                 "Unguided Self-Help", 
+                 "Waitlist")
+
+netgraph(m.netmeta, 
+         labels = long.labels)
+
+library(dmetar)
+
+d.evidence <- direct.evidence.plot(m.netmeta)
+plot(d.evidence)
+```
+
+根据König、Krahn和Binder(2013)，平均路径长度>2意味着在解释比较估计值时应特别谨慎.
+
+获得效应量
+
+```{r}
+result.matrix <- m.netmeta$TE.fixed
+result.matrix <- round(result.matrix, 2)
+result.matrix[lower.tri(result.matrix, diag = FALSE)] <- NA
+result.matrix
+# Produce effect table
+netleague <- netleague(m.netmeta, 
+                       bracket = "(", # use round brackets
+                       digits=2)      # round to two digits
+netleague
+```
+
+使用P-scores对疗效进行排序
+
+```{r}
+netrank(m.netmeta, small.values = "good")
+forest(m.netmeta, 
+       reference.group = "cau",
+       sortvar = TE,
+       xlim = c(-1.3, 0.5),
+       smlab = paste("Therapy Formats vs. Care As Usual \n",
+                     "(Depressive Symptoms)"),
+       drop.reference.group = TRUE,
+       label.left = "Favors Intervention",
+       label.right = "Favors Care As Usual",
+       labels = long.labels)
+```
+
+使用网络热图(net heat plot)评估网络的不一致性.
+
+```{r}
+netheat(m.netmeta)
+#灰色方框表示一个治疗对比对于另一个治疗对比的估算有多重要；彩色背景表示行中设计可归因于列中的设计的不一致性程度
+#使用随机效应模型
+netheat(m.netmeta, random = TRUE)
+```
+
+使用网络拆分(net splitting)评估不一致性.
+
+```{r}
+netsplit(m.netmeta)
+netsplit(m.netmeta) %>% forest()
+```
+
+比较调整后的漏斗图(Comparison-Adjusted Funnel Plots)
+
+比较调整漏斗图可以来评估网络meta分析中的发表偏倚风险。这种漏斗图考虑了新研究更容易发表这一假设.
+
+```{r}
+funnel(m.netmeta, 
+      order = c("wlc", "cau", "ind", "grp", # from old to new
+                "tel", "ush", "gsh"), 
+      pch = c(1:4, 5, 6, 8, 15:19, 21:24), 
+      col = c("blue", "red", "purple", "forestgreen", "grey", 
+              "green", "black", "brown", "orange", "pink", 
+              "khaki", "plum", "aquamarine", "sandybrown", 
+              "coral", "gold4"), 
+      linreg = TRUE)
+```
+
+## 贝叶斯网络meta分析(Bayesian Network Meta-Analysis)
+
+### 贝叶斯推断(Bayesian Inference)
+
+贝叶斯推断是频率学派以外的另一种统计学流派。贝叶斯推断的基础是贝叶斯公式：
+
+$$P(\text{A}|\text{B})=\frac{P(\text{B}|\text{A})\times P(\text{A})}{P(\text{B})}$$
+
+或表示为：后验概率(posterior probability)正比于似然(likelihood)乘以先验概率(prior probability)
+
+$$P(\text{A}|\text{B}) \propto P(\text{B}|\text{A})\times P(\text{A})$$
+
+$$P(\boldsymbol{\theta} | {\boldsymbol{Y}} ) \propto P( {\boldsymbol{Y}} | \boldsymbol{\theta} )\times P( \boldsymbol{\theta})$$
+
+### 贝叶斯网络meta分析模型
+
+#### 配对meta分析(Pairwise Meta-Analysis)
+
+经典meta分析的固定效应模型如下：
+
+$$\hat\theta_k \sim \mathcal{N}(\theta,\sigma_k^2)$$
+
+随机效应模型：
+
+$$\hat\theta_k \sim \mathcal{N}(\theta_k,\sigma_k^2)\\\theta_k \sim \mathcal{N}(\mu,\tau^2)$$
+
+在网络模型中：
+
+$$\begin{align}\hat\theta_{k \text{,A,B}} &\sim \mathcal{N}(\theta_{k\text{,A,B}},\sigma_k^2) \notag \\\theta_{k \text{,A,B}} &\sim \mathcal{N}(\theta_{\text{A,B}},\tau^2)
+\end{align}$$
+
+$$\begin{align}\begin{bmatrix}\hat\theta_{k\text{,A,E}} \\\hat\theta_{k\text{,B,E}} \\\hat\theta_{k\text{,C,E}} \\\hat\theta_{k\text{,D,E}}\end{bmatrix}&=\mathcal{N}\left(\begin{bmatrix}\theta_{\text{A,E}} \\\theta_{\text{B,E}} \\\theta_{\text{C,E}} \\\theta_{\text{D,E}}\end{bmatrix},\begin{bmatrix}\tau^2 & \tau^2/2 & \tau^2/2 & \tau^2/2 \\\tau^2/2 & \tau^2 & \tau^2/2 & \tau^2/2 \\\tau^2/2 & \tau^2/2 & \tau^2 & \tau^2/2 \\\tau^2/2 & \tau^2/2 & \tau^2/2 & \tau^2\end{bmatrix}\right)\end{align}$$
+
+```{r}
+#install.packages('gemtc')
+library(gemtc)
+library(rjags)
+
+library(dmetar)
+data(TherapyFormatsGeMTC)
+
+head(TherapyFormatsGeMTC$data)
+
+TherapyFormatsGeMTC$treat.codes
+
+network <- mtc.network(data.re  = TherapyFormatsGeMTC$data,
+                       treatments = TherapyFormatsGeMTC$treat.codes)
+summary(network)
+
+plot(network, 
+     use.description = TRUE) # Use full treatment names
+
+#better visualization of our network using the Fruchterman-Reingold algorithm
+
+library(igraph)
+set.seed(12345) # set seed for reproducibility
+
+plot(network, 
+     use.description = TRUE,            # Use full treatment names
+     vertex.color = "white",            # node color
+     vertex.label.color = "gray10",     # treatment label color
+     vertex.shape = "sphere",           # shape of the node
+     vertex.size = 20,                  # size of the node
+     vertex.label.dist = 2,             # distance label-node center
+     vertex.label.cex = 1.5,            # node label size
+     edge.curved = 0.2,                 # edge curvature
+     layout = layout.fruchterman.reingold)
+
+# We give our compiled model the name `model`.
+model <- mtc.model(network,
+                   likelihood = "normal",
+                   link = "identity",
+                   linearModel = "random",
+                   n.chain = 4) #马尔科夫链的数量
+```
+
+马尔科夫链蒙特卡洛取样(Markov Chain Monte Carlo Sampling)
+
+通过 MCMC 模拟，我们可以估计参数的后验分布，从而得出网络meta分析的结果。在这一过程中，我们要实现两个重要的预期目标：
+
+- 我们希望马尔科夫链蒙特卡洛模拟的前几次运行不会对整个模拟结果产生太大影响，因为前几次运行可能会产生不充分的结果
+
+- 马尔可夫链蒙特卡罗过程的运行时间应足够长，以便我们获得模型参数的准确估计值（即应该收敛）.
+
+```{r}
+mcmc1 <- mtc.run(model, n.adapt = 50, n.iter = 1000, thin = 10) #预训练
+mcmc2 <- mtc.run(model, n.adapt = 5000, n.iter = 1e5, thin = 10)
+
+plot(mcmc1)
+plot(mcmc2)
+
+# Gelman-Rubin plot. This plot shows the so-called Potential Scale Reduction Factor (PSRF)
+gelman.plot(mcmc1)
+gelman.plot(mcmc2)
+gelman.diag(mcmc1)$mpsrf
+gelman.diag(mcmc2)$mpsrf
+```
+
+
+```{r}
+rank <- rank.probability(mcmc2, preferredDirection = -1)
+plot(rank, beside=TRUE)
+
+forest(relative.effect(mcmc2, t1 = "cau"), 
+       use.description = TRUE, # Use long treatment names
+       xlim = c(-1.5, 0.5))
+
+library(dmetar)
+rank.probability <- rank.probability(mcmc2)
+sucra <- dmetar::sucra(rank.probability, lower.is.better = TRUE)
+
+sucra
+
+plot(sucra)
+
+results <- relative.effect.table(mcmc2)
+save(results, file = "results.csv")
+```
+
+Surface Under the Cumulative Ranking (SUCRA) score：
+
+$$\text{SUCRA}_j = \frac{\sum_{b=1}^{a-1}\text{cum}_{jb}}{a-1}$$
+
+### 网络meta回归
+
+```{r}
+TherapyFormatsGeMTC$study.info
+
+network.mr <- mtc.network(data.re = TherapyFormatsGeMTC$data,
+                          studies = TherapyFormatsGeMTC$study.info,
+                          treatments = TherapyFormatsGeMTC$treat.codes)
+
+regressor <- list(coefficient = "shared",
+                  variable = "rob",
+                  control = "cau")
+
+model.mr <- mtc.model(network.mr,
+                      likelihood = "normal",
+                      link = "identity",
+                      type = "regression",
+                      regressor = regressor)
+
+mcmc3 <- mtc.run(model.mr,
+                 n.adapt = 5000,
+                 n.iter = 1e5,
+                 thin = 10)
+
+summary(mcmc3)
+
+forest(relative.effect(mcmc3, t1 = "cau", covariate = 1),
+       use.description = TRUE, xlim = c(-1.5, 1))
+title("High Risk of Bias")
+        
+forest(relative.effect(mcmc3, t1 = "cau", covariate = 0),
+       use.description = TRUE, xlim = c(-1.5, 1))
+title("Low Risk of Bias")
+
+# deviance information criteria (DICs)
+summary(mcmc3)$DIC
+summary(mcmc2)$DIC
+```
+
